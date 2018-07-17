@@ -3,10 +3,12 @@
 
 #Pkg.add("JuMP")
 using JuMP
-using Clp #this is a solver
+#using Clp #this is a solver
+using Gurobi
 
 ### MODEL ###
-m = Model(solver = ClpSolver())
+#m = Model(solver = ClpSolver())
+m = Model(solver=GurobiSolver(Presolve=0))
 
 # PARAMETERS ###
 n_t =10# number of timesteps
@@ -50,10 +52,12 @@ pf = repeat([1], inner = [n_g, n_t])
 # @variable(m, 0 <= x <= 2 )
 @variable(m, z[1:n_gsl,1:n_t]) # slow generator startup
 @variable(m, 0 <= w[1:n_gsl,1:n_t] <= 1) # slow generator commitment RELAXED BINARY
+#@variable(m, w[1:n_gsl,1:n_t], Bin) # slow generator commitment TRUE BINARY
 
 #real-time commitment, startup
 @variable(m, v[1:n_g,1:n_t,1:n_omega]) # generator startup
 @variable(m, 0 <= u[1:n_g,1:n_t,1:n_omega] <= 1) # generator commitment RELAXED BINARY
+#@variable(m, u[1:n_g,1:n_t,1:n_omega], Bin) # generator commitment TRUE BINARY
 
 #production variables
 @variable(m, p[1:n_g,1:n_t,1:n_omega] >= 0) #generator production
@@ -124,7 +128,7 @@ pf = repeat([1], inner = [n_g, n_t])
 print(m)
 
 # Solve the model
-@printf("\nSolving with Clp:\n")
+@printf("\nSolving:\n")
 status = solve(m)
 @printf("Status: %s\n", status)
 
