@@ -14,10 +14,12 @@ unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year
 n_periods = 5
 
 ### READ IN DATA ###
-dem = CSV.read(string(data_fol , "/demand_2015_" , n_periods , ".csv"),
+dem2 = CSV.read(string(data_fol , "/demand_2015_" , n_periods , ".csv"),
                 datarow=1)
-dem = dem[2]
-genset = CSV.read(string(unformat_data_fol,"/gen_data_merged_simple.csv"))
+# dem = dem2[2]/50 #to adjust for current dummy data - otherwise use below line
+dem = dem2[2]
+
+genset = CSV.read(string(unformat_data_fol,"/gen_data_merged_simple.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -29,32 +31,40 @@ genset = CSV.read(string(unformat_data_fol,"/gen_data_merged_simple.csv"))
 #          data_frame_value_in_set =
 #           data_frame[findin(data_frame[:quality], set_of_interest), :]
 
+# x = ["a","b","c"]
+# set_interest = ["c"]# for this to work must have the []
+# findin(x,set_interest)
+
 slow_gens = ["COAL","NUCLEAR","DR"]
 fast_gens = ["GAS","HYDRO"]
 dr_gens = ["DR"]
+notdr_gens = ["GAS","HYDRO","COAL","NUCLEAR"]
 
+dr_ind = findin(genset[2],dr_gens)
+slow_ind = findin(genset[2],slow_gens)
+fast_ind = findin(genset[2],fast_gens)
 
 # PARAMETERS ###
+n_gsl= length(slow_ind)# number of slow generators
+n_g =nrow(genset)# number of generators
+n_gf = length(fast_ind)
+n_gdr = length(dr_ind) #number of DR generators
+
 n_t = n_periods# number of timesteps
-n_gsl= 5# number of slow generators
-n_g =10# number of generators
-n_gf = 5
-n_gdr = 1 #number of DR generators
 n_omega=3 #number of realizations
 t_firsts=1 # index of timesteps that are 'first' of a timeblock
-t_notfirsts=23 # timesteps that follow
 
 ### INPUT DATA ###
-dem = [collect(1:(n_t/2)); collect((n_t/2):-1:1);1] * 18
+# dem = [collect(1:(n_t/2));collect((n_t/2):-1:1);1] * 18
 
 ### SETS ###
 TIME = 1:n_t
 SCENARIOS = 1:n_omega
 GENERATORS = 1:n_g #all generators
-GEN_NODR = (n_gdr + 1):n_g
-GF = 6:10
-GSL = 1:5 #slow generators
-GDR = 1 #DR generators MUST BE LISTED FIRST
+GEN_NODR = findin(genset[2],notdr_gens)
+GF = fast_ind
+GSL = slow_ind #slow generators
+GDR = dr_ind #DR generators
 
 ### STOCHASTIC PARAMS ###
 vdr = [0.9,1,1.1]
@@ -63,11 +73,15 @@ pro = [0.25,0.5,0.25]
 
 
 #generator min and max
-pmin = repeat([1],inner = n_g)
-pmax = repeat([10],outer = n_g)
-startup = [0;repeat([2],inner = n_gsl -n_gdr);repeat([1], inner = n_gf)]
+#pmin = repeat([1],inner = n_g)
+pmin = genset[:EIAPMin_MW]
+# pmax = repeat([10],outer = n_g)
+pmax = genset[Symbol("Nameplate Capacity (MW)")]
+# startup = [0;repeat([2],inner = n_gsl -n_gdr);repeat([1], inner = n_gf)]
+startup = genset[Symbol("Startup cost")]
 #varcost = [0;repeat([1],inner = n_gsl -n_gdr);repeat([2], inner = n_gf)]
-varcost = [0;collect(1:0.1:(1+0.1*(n_gsl-n_gdr)));collect(2:0.1:(2+0.1*(n_gf)))]
+# varcost = [0;collect(1:0.1:(1+0.1*(n_gsl-n_gdr)));collect(2:0.1:(2+0.1*(n_gf)))]
+varcost = genset[Symbol("variable cost (\$/MWh)")]
 
 #generator availability
 pf = repeat([1], inner = [n_g, n_t])
@@ -108,25 +122,25 @@ m = Model(solver = ClpSolver())
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
 #GENMAXDR
 @constraint(m,[g = 1:n_gdr, t = 1:n_t],
-    p_dr[g,t] <= pmax[g] * w[g,t] * pf[g,t]) #needed for p_da
+    p_dr[g,t] <= pmax[GDR[g]] * w[g,t] * pf[g,t]) #needed for p_da
 #START_S
-@constraint(m,[g = GSL, t=1:(n_t-1)],
+@constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
     z[g,t+1] == w[g,t+1] - w[g,t])
 #START_F
-@constraint(m,[g=GF ,t=1:(n_t-1), o = SCENARIOS],
+@constraint(m,[g=GENERATORS ,t=1:(n_t-1), o = SCENARIOS],
     v[g,t+1,o] == u[g,t+1,o] - u[g,t,o])
 #INIT_S
-@constraint(m,[g=GSL,t=t_firsts],
+@constraint(m,[g=1:n_gsl,t=t_firsts],
     z[g,t] == w[g,t])
 #INIT_F
-@constraint(m,[g=GF,t=t_firsts, o = SCENARIOS],
+@constraint(m,[g=GENERATORS,t=t_firsts, o = SCENARIOS],
     v[g,t,o] == u[g,t,o])
 #NAN_ST
-@constraint(m,[g = GSL, t = TIME, o = SCENARIOS],
-    v[g,t,o] == z[g,t])
+@constraint(m,[g = 1:n_gsl, t = TIME, o = SCENARIOS],
+    v[GSL[g],t,o] == z[g,t])
 #NAN_CM
-@constraint(m,[g = GSL, t = TIME, o = SCENARIOS],
-    u[g,t,o] == w[g,t])
+@constraint(m,[g = 1:n_gsl, t = TIME, o = SCENARIOS],
+    u[GSL[g],t,o] == w[g,t])
 
 #DR_RAND
 #think carefully about how to index into p and p_dr
@@ -139,8 +153,8 @@ m = Model(solver = ClpSolver())
 # so that the indices are the same for both.
 # this is kinda hack-y but functional and perhaps cleaner
 # for the equations. Lets go with this for now
-@constraint(m, [g=GDR,t = TIME, o = SCENARIOS],
-     p[g,t,o] == p_dr[g,t] * vdr[o])
+@constraint(m, [g=1:n_gdr,t = TIME, o = SCENARIOS],
+     p[GDR[g],t,o] == p_dr[g,t] * vdr[o])
 
 #STARTUP COSTS
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
@@ -153,7 +167,7 @@ m = Model(solver = ClpSolver())
     for o = SCENARIOS))
 
 # Check model
-print(m)
+# print(m)
 
 # Solve the model
 @printf("\nSolving:\n")
@@ -169,13 +183,13 @@ print("schedule of DR")
 x = getvalue(p_dr)
 display(x)
 print("production of DR:")
-y = getvalue(p[1,:,:])
+y = getvalue(p[GDR,:,:])
 display(y)
 print("production of slow generators:")
-zs = getvalue(p[2:5,:,:])
+zs = getvalue(p[GSL,:,:])
 display(zs)
 print("production of fast generators:")
-zf = getvalue(p[6:10,:,:])
+zf = getvalue(p[GF,:,:])
 display(zf)
 
 # check commitment
