@@ -9,17 +9,33 @@ using DataFrames
 using CSV
 
 ### FILE PATHS ###
-data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
-unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
-n_periods = 5
+default_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Julia_scripts/julia_inputs/simple"
+# data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
+# unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
+# scen_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/uniform_distributions"
+
+# PARAMS USED FOR IDENTIFYING CORRECT FILE #
+n_periods = 24
+n_omega=5 #number of realizations
+# t_firsts=1 ,20# index of timesteps that are 'first' of a timeblock
+# t_notfirst = vcat([2:19...],[21:24...])
 
 ### READ IN DATA ###
-dem2 = CSV.read(string(data_fol , "/demand_2015_" , n_periods , ".csv"),
+dem2 = CSV.read(string(default_fol , "/demand_2015_" , n_periods , ".csv"),
                 datarow=1)
-# dem = dem2[2]/50 #to adjust for current dummy data - otherwise use below line
 dem = dem2[2]
 
-genset = CSV.read(string(unformat_data_fol,"/gen_data_merged_simple.csv"), missingstring ="NA")
+t_firsts = CSV.read(string(default_fol,"/t_firsts.csv"))[1]
+t_notfirst = CSV.read(string(default_fol,"/t_notfirsts.csv"))[1]
+
+# STOCHASTIC PARAMS #
+# vdr = [0.9,1,1.1]
+# pro = [0.25,0.5,0.25]
+probs = CSV.read(string(default_fol , "/dist_input_n",n_omega,"_m0.9_0.8pp.csv"))
+vdr = convert(Array,probs[1,:])
+pro = convert(Array,probs[2,:])
+
+genset = CSV.read(string(default_fol,"/gen_data_merged_simple.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -44,18 +60,12 @@ dr_ind = findin(genset[2],dr_gens)
 slow_ind = findin(genset[2],slow_gens)
 fast_ind = findin(genset[2],fast_gens)
 
-# PARAMETERS ###
+# AUTO PARAMETERS ###
 n_gsl= length(slow_ind)# number of slow generators
 n_g =nrow(genset)# number of generators
 n_gf = length(fast_ind)
 n_gdr = length(dr_ind) #number of DR generators
-
 n_t = n_periods# number of timesteps
-n_omega=3 #number of realizations
-t_firsts=1 # index of timesteps that are 'first' of a timeblock
-
-### INPUT DATA ###
-# dem = [collect(1:(n_t/2));collect((n_t/2):-1:1);1] * 18
 
 ### SETS ###
 TIME = 1:n_t
@@ -65,12 +75,6 @@ GEN_NODR = findin(genset[2],notdr_gens)
 GF = fast_ind
 GSL = slow_ind #slow generators
 GDR = dr_ind #DR generators
-
-### STOCHASTIC PARAMS ###
-vdr = [0.9,1,1.1]
-pro = [0.25,0.5,0.25]
-#TODO: insert a check that vdr, pro are same length as n_omega
-
 
 #generator min and max
 #pmin = repeat([1],inner = n_g)
@@ -87,19 +91,19 @@ varcost = genset[Symbol("variable cost (\$/MWh)")]
 pf = repeat([1], inner = [n_g, n_t])
 
 ### MODEL ###
-m = Model(solver = ClpSolver())
-# m = Model(solver=GurobiSolver(Presolve=0))
+# m = Model(solver = ClpSolver())
+m = Model(solver=GurobiSolver(Presolve=0))
 
 ### VARIABLES ###
 # @variable(m, 0 <= x <= 2 )
 @variable(m, z[1:n_gsl,1:n_t]) # slow generator startup
-@variable(m, 0 <= w[1:n_gsl,1:n_t] <= 1) # slow generator commitment RELAXED BINARY
-#@variable(m, w[1:n_gsl,1:n_t], Bin) # slow generator commitment TRUE BINARY
+# @variable(m, 0 <= w[1:n_gsl,1:n_t] <= 1) # slow generator commitment RELAXED BINARY
+@variable(m, w[1:n_gsl,1:n_t], Bin) # slow generator commitment TRUE BINARY
 
 #real-time commitment, startup
 @variable(m, v[1:n_g,1:n_t,1:n_omega]) # generator startup
-@variable(m, 0 <= u[1:n_g,1:n_t,1:n_omega] <= 1) # generator commitment RELAXED BINARY
-#@variable(m, u[1:n_g,1:n_t,1:n_omega], Bin) # generator commitment TRUE BINARY
+# @variable(m, 0 <= u[1:n_g,1:n_t,1:n_omega] <= 1) # generator commitment RELAXED BINARY
+@variable(m, u[1:n_g,1:n_t,1:n_omega], Bin) # generator commitment TRUE BINARY
 
 #production variables
 @variable(m, p[1:n_g,1:n_t,1:n_omega] >= 0) #generator production
@@ -124,11 +128,15 @@ m = Model(solver = ClpSolver())
 @constraint(m,[g = 1:n_gdr, t = 1:n_t],
     p_dr[g,t] <= pmax[GDR[g]] * w[g,t] * pf[g,t]) #needed for p_da
 #START_S
-@constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
-    z[g,t+1] == w[g,t+1] - w[g,t])
+# @constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
+    # z[g,t+1] == w[g,t+1] - w[g,t])
+@constraint(m,[g = 1:n_gsl, t=t_notfirst],
+    z[g,t] == w[g,t] - w[g,t-1])
 #START_F
-@constraint(m,[g=GENERATORS ,t=1:(n_t-1), o = SCENARIOS],
-    v[g,t+1,o] == u[g,t+1,o] - u[g,t,o])
+# @constraint(m,[g=GENERATORS ,t=1:(n_t-1), o = SCENARIOS],
+#     v[g,t+1,o] == u[g,t+1,o] - u[g,t,o])
+@constraint(m,[g=GENERATORS ,t=t_notfirst, o = SCENARIOS],
+    v[g,t,o] == u[g,t,o] - u[g,t-1,o])
 #INIT_S
 @constraint(m,[g=1:n_gsl,t=t_firsts],
     z[g,t] == w[g,t])
