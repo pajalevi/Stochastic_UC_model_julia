@@ -1,18 +1,34 @@
 # Patricia Levi
 # pjlevi@stanford.edu
 
-#Pkg.add("JuMP")
+# on sherlock?
+Sherlock = false
+
+# For SHERLOCK:
+if Sherlock
+    Pkg.update()
+    Pkg.add("JuMP")
+    #Pkg.add("Clp")
+    Pkg.add("Gurobi")
+    Pkg.add("DataFrames")
+    Pkg.add("CSV")
+end
+
 using JuMP
-using Clp #this is a solver
+#using Clp #this is a solver
 using Gurobi
 using DataFrames
 using CSV
 
 ### FILE PATHS ###
-default_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Julia_scripts/julia_inputs/simple"
-# data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
-# unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
-# scen_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/uniform_distributions"
+if Sherlock
+    default_fol = "~/dr_stoch_uc/julia_ver/inputs/simple"
+else
+    default_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Julia_scripts/julia_inputs/simple"
+    # data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
+    # unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
+    # scen_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/uniform_distributions"
+end
 
 # PARAMS USED FOR IDENTIFYING CORRECT FILE #
 n_periods = 24
@@ -27,6 +43,8 @@ dem = dem2[2]
 
 t_firsts = CSV.read(string(default_fol,"/t_firsts.csv"))[1]
 t_notfirst = CSV.read(string(default_fol,"/t_notfirsts.csv"))[1]
+
+# TODO: gen availability readin (for renewables, DR)
 
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
