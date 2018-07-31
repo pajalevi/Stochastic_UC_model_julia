@@ -2,16 +2,16 @@
 # pjlevi@stanford.edu
 
 # on sherlock?
-Sherlock = false
+Sherlock = true
 
 # For SHERLOCK:
 if Sherlock
-    #Pkg.update()
+    Pkg.update()
     Pkg.add("JuMP")
     #Pkg.add("Clp")
     Pkg.add("Gurobi")
     Pkg.add("DataFrames")
-    #Pkg.pin("DataFrames",v"0.11.7")
+    Pkg.pin("DataFrames",v"0.11.7")
     Pkg.add("CSV")
 end
 
@@ -23,16 +23,17 @@ using CSV
 
 ### FILE PATHS ###
 if Sherlock
-    default_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/simple"
+    default_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/48h_full"
 else
-    default_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Julia_scripts/julia_inputs/simple"
+    default_fol =
+    "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Julia_scripts/julia_inputs/48h_full"
     # data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
     # unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
     # scen_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/uniform_distributions"
 end
 
 # PARAMS USED FOR IDENTIFYING CORRECT FILE #
-n_periods = 24
+n_periods = 48
 n_omega=5 #number of realizations
 # t_firsts=1 ,20# index of timesteps that are 'first' of a timeblock
 # t_notfirst = vcat([2:19...],[21:24...])
@@ -45,8 +46,6 @@ dem = dem2[2]
 t_firsts = CSV.read(string(default_fol,"/t_firsts.csv"))[1]
 t_notfirst = CSV.read(string(default_fol,"/t_notfirsts.csv"))[1]
 
-# TODO: gen availability readin (for renewables, DR)
-
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
@@ -54,7 +53,7 @@ probs = CSV.read(string(default_fol , "/dist_input_n",n_omega,"_m0.9_0.8pp.csv")
 vdr = convert(Array,probs[1,:])
 pro = convert(Array,probs[2,:])
 
-genset = CSV.read(string(default_fol,"/gen_data_merged_simple.csv"), missingstring ="NA")
+genset = CSV.read(string(default_fol,"/gen_merged_withIDs.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -70,14 +69,19 @@ genset = CSV.read(string(default_fol,"/gen_data_merged_simple.csv"), missingstri
 # set_interest = ["c"]# for this to work must have the []
 # findin(x,set_interest)
 
-slow_gens = ["COAL","NUCLEAR","DR"]
-fast_gens = ["GAS","HYDRO"]
+slow_gens = ["COAL","NUCLEAR","DR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
+            "BIOMASS","GAS","GAS_CC",
+            "IMPORT_COAL","IMPORT_GAS"]
+fast_gens = ["HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
 dr_gens = ["DR"]
-notdr_gens = ["GAS","HYDRO","COAL","NUCLEAR"]
+notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
+            "BIOMASS","GAS","GAS_CC",
+            "IMPORT_COAL","IMPORT_GAS",
+            "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
 
-dr_ind = findin(genset[2],dr_gens)
-slow_ind = findin(genset[2],slow_gens)
-fast_ind = findin(genset[2],fast_gens)
+dr_ind = findin(genset[:Fuel],dr_gens)
+slow_ind = findin(genset[:Fuel],slow_gens)
+fast_ind = findin(genset[:Fuel],fast_gens)
 
 # AUTO PARAMETERS ###
 n_gsl= length(slow_ind)# number of slow generators
@@ -90,24 +94,51 @@ n_t = n_periods# number of timesteps
 TIME = 1:n_t
 SCENARIOS = 1:n_omega
 GENERATORS = 1:n_g #all generators
-GEN_NODR = findin(genset[2],notdr_gens)
+GEN_NODR = findin(genset[:Fuel],notdr_gens)
 GF = fast_ind
 GSL = slow_ind #slow generators
 GDR = dr_ind #DR generators
 
 #generator min and max
 #pmin = repeat([1],inner = n_g)
-pmin = genset[:EIAPMin_MW]
+pmin = genset[:PMin]
 # pmax = repeat([10],outer = n_g)
-pmax = genset[Symbol("Nameplate Capacity (MW)")]
+pmax = genset[:Capacity]
 # startup = [0;repeat([2],inner = n_gsl -n_gdr);repeat([1], inner = n_gf)]
-startup = genset[Symbol("Startup cost")]
+startup = genset[:StartCost]
 #varcost = [0;repeat([1],inner = n_gsl -n_gdr);repeat([2], inner = n_gf)]
 # varcost = [0;collect(1:0.1:(1+0.1*(n_gsl-n_gdr)));collect(2:0.1:(2+0.1*(n_gf)))]
-varcost = genset[Symbol("variable cost (\$/MWh)")]
+varcost = genset[:VCost]
 
 #generator availability
 pf = repeat([1], inner = [n_g, n_t])
+pf = convert(Array{Float64},pf)
+
+
+# load wind, solar info
+solar_avail = CSV.read(string(default_fol,"/solar_input_8760.txt"))
+wind_avail = CSV.read(string(default_fol,"/wind_input_8760.txt"))
+# remove first col of each
+solar_avail = solar_avail[:,2:ncol(solar_avail)]
+wind_avail = wind_avail[:,2:ncol(wind_avail)]
+# loop through all colnames, use findin(genset[:plantUnique],XX) to get row
+# sub in new info
+for i in 1:length(names(solar_avail))
+    col = names(solar_avail)[i]
+    print(convert(String, col))
+    ind = findin(genset[:plantUnique],[convert(String, col)])
+    print(ind)
+    pf[ind,:] = solar_avail[1:n_t,i]
+end
+
+for i in 1:length(names(wind_avail))
+    col = names(wind_avail)[i]
+    print(convert(String, col))
+    ind = findin(genset[:plantUnique],[convert(String, col)])
+    print(ind)
+    pf[ind,:] = wind_avail[1:n_t,i]
+end
+
 
 ### MODEL ###
 # m = Model(solver = ClpSolver())
