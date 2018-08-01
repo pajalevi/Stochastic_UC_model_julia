@@ -1,8 +1,13 @@
 # Patricia Levi
 # pjlevi@stanford.edu
 
+# TODO:
+# ---- FIGURE OUT WHY DR IS NOT BEING DISPATCHED!!
+# X--- write outputs to csv
+# --- make subselection of solar/wind_avail less dependent on n_t
+
 # on sherlock?
-Sherlock = true
+Sherlock = false
 
 # For SHERLOCK:
 if Sherlock
@@ -20,6 +25,8 @@ using JuMP
 using Gurobi
 using DataFrames
 using CSV
+
+include("convert3dto2d.jl")
 
 ### FILE PATHS ###
 if Sherlock
@@ -125,9 +132,9 @@ wind_avail = wind_avail[:,2:ncol(wind_avail)]
 # sub in new info
 for i in 1:length(names(solar_avail))
     col = names(solar_avail)[i]
-    print(convert(String, col))
+    # print(convert(String, col))
     ind = findin(genset[:plantUnique],[convert(String, col)])
-    print(ind)
+    # print(ind)
     pf[ind,:] = solar_avail[1:n_t,i]
 end
 
@@ -239,26 +246,68 @@ status = solve(m)
 # check production
 print("schedule of DR")
 x = getvalue(p_dr)
-display(x)
+x_df = DataFrame(transpose(x))
+names!(x_df,[Symbol("$input") for input in genset[dr_ind,:plantUnique]])
+CSV.write(string(default_fol,"/DR_schedule.csv"), x_df)
+
+# display(x)
 print("production of DR:")
 y = getvalue(p[GDR,:,:])
-display(y)
+
+y_out = convert3dto2d(y,1, 3,  2,
+    vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+     genset[dr_ind,:plantUnique])
+CSV.write(string(default_fol,"/DR_production.csv"), y_out)
+
+# display(y)
 print("production of slow generators:")
 zs = getvalue(p[GSL,:,:])
-display(zs)
+
+y_out = convert3dto2d(zs,1, 3, 2,
+    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+     genset[slow_ind,:plantUnique])
+CSV.write(string(default_fol,"/slow_production.csv"), y_out)
+
+# display(zs)
 print("production of fast generators:")
 zf = getvalue(p[GF,:,:])
-display(zf)
+y_out = convert3dto2d(zf,1, 3, 2,
+    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+     genset[fast_ind,:plantUnique])
+CSV.write(string(default_fol,"/fast_production.csv"), y_out)
+# display(zf)
 
 # check commitment
 print("commitment of slow generators:")
-display(getvalue(w))
+# display(getvalue(w))
+w_out = getvalue(w)
+wdf = DataFrame(transpose(w_out))
+names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
+CSV.write(string(default_fol,"/slow_commitment.csv"), wdf)
+
 print("startup of slow generators:")
-display(getvalue(z))
+z_out = getvalue(z)
+zdf = DataFrame(transpose(z_out))
+names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
+CSV.write(string(default_fol,"/slow_startup.csv"), zdf)
+
+# display(getvalue(z))
+
 print("commitment of all generators")
-display(getvalue(u))
+# display(getvalue(u))
+u_out = getvalue(u)
+y_out = convert3dto2d(u_out,1, 3, 2,
+    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+     genset[:plantUnique])
+CSV.write(string(default_fol,"/u_commitment.csv"), y_out)
+
 print("startup of all generators")
-display(getvalue(v))
+# display(getvalue(v))
+v_out = getvalue(v)
+y_out = convert3dto2d(v_out,1, 3, 2,
+    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+     genset[:plantUnique])
+CSV.write(string(default_fol,"/v_startup.csv"), y_out)
 
 # check costs
 print("total cost")
@@ -278,3 +327,10 @@ totvarcost = getvalue(sum(pro[o] *
     sum(p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 display("text/plain",totvarcost/totcost)
+
+output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
+                            TotVarCst = totvarcost,
+                            FracStartupCost = totstartupcost/totcost,
+                            FracVarCost = totvarcost/totcost)
+
+CSV.write(string(default_fol,"/summary_stats.csv"), output_summary)
