@@ -11,13 +11,13 @@ Sherlock = false
 
 # For SHERLOCK:
 if Sherlock
-    Pkg.update()
-    Pkg.add("JuMP")
-    #Pkg.add("Clp")
-    Pkg.add("Gurobi")
-    Pkg.add("DataFrames")
-    Pkg.pin("DataFrames",v"0.11.7")
-    Pkg.add("CSV")
+    #Pkg.update()
+    # Pkg.add("JuMP")
+    # #Pkg.add("Clp")
+    # Pkg.add("Gurobi")
+    # Pkg.add("DataFrames")
+    # Pkg.pin("DataFrames",v"0.11.7")
+    # Pkg.add("CSV")
 end
 
 using JuMP
@@ -25,6 +25,8 @@ using JuMP
 using Gurobi
 using DataFrames
 using CSV
+
+test = Gurobi.Env() # test that gurobi is working
 
 include("convert3dto2d.jl")
 
@@ -44,6 +46,7 @@ n_periods = 48
 n_omega=5 #number of realizations
 # t_firsts=1 ,20# index of timesteps that are 'first' of a timeblock
 # t_notfirst = vcat([2:19...],[21:24...])
+dr_varcost = 10000 #for overriding variable cost to test things
 
 ### READ IN DATA ###
 dem2 = CSV.read(string(default_fol , "/demand_2015_" , n_periods , ".csv"),
@@ -116,6 +119,7 @@ startup = genset[:StartCost]
 #varcost = [0;repeat([1],inner = n_gsl -n_gdr);repeat([2], inner = n_gf)]
 # varcost = [0;collect(1:0.1:(1+0.1*(n_gsl-n_gdr)));collect(2:0.1:(2+0.1*(n_gf)))]
 varcost = genset[:VCost]
+varcost[dr_ind] = dr_varcost
 
 #generator availability
 pf = repeat([1], inner = [n_g, n_t])
@@ -140,9 +144,9 @@ end
 
 for i in 1:length(names(wind_avail))
     col = names(wind_avail)[i]
-    print(convert(String, col))
+    # print(convert(String, col))
     ind = findin(genset[:plantUnique],[convert(String, col)])
-    print(ind)
+    # print(ind)
     pf[ind,:] = wind_avail[1:n_t,i]
 end
 
@@ -173,7 +177,7 @@ m = Model(solver=GurobiSolver(Presolve=0))
 # @constraint(m, 1x + 5y <= 3.0 )
 
 #SUPPLY-DEMAND
-@constraint(m,[t=1:n_t, o=1:n_omega],
+@constraint(m,supplydemand[t=1:n_t, o=1:n_omega],
     sum( p[g,t,o] for g=1:n_g) == dem[t])
 #GENMIN
 @constraint(m, [g= 1:n_g, t= 1:n_t, o=1:n_omega ],
@@ -242,6 +246,13 @@ status = solve(m)
 # ok, it solves. Now I just need to figure out how to reasonably
 # plot the output so I can check it -- refer to R files to get a
 # point of comparison for how I manipulated stuff...
+
+# TODO: pull electricity price. this should be shadow price
+# of supply-demand constraint
+# use getdual(<nameofconstraint>)
+# so I need to name the constraint
+# ok but this does not exist for mixed integer problems. dang
+# should look at max var cost of dispatched plants
 
 # check production
 print("schedule of DR")
