@@ -2,7 +2,6 @@
 # pjlevi@stanford.edu
 
 # TODO:
-# ---- FIGURE OUT WHY DR IS NOT BEING DISPATCHED!!
 # X--- write outputs to csv
 # --- make subselection of solar/wind_avail less dependent on n_t
 
@@ -21,7 +20,7 @@ if Sherlock
 end
 
 using JuMP
-#using Clp #this is a solver
+#using Clp 
 using Gurobi
 using DataFrames
 using CSV
@@ -60,7 +59,7 @@ t_notfirst = CSV.read(string(default_fol,"/t_notfirsts.csv"))[1]
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
 probs = CSV.read(string(default_fol , "/dist_input_n",n_omega,"_m0.9_0.8pp.csv"))
-vdr = convert(Array,probs[1,:])
+vdr = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro = convert(Array,probs[2,:])
 
 genset = CSV.read(string(default_fol,"/gen_merged_withIDs.csv"), missingstring ="NA")

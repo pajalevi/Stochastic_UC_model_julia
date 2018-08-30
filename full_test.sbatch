@@ -4,7 +4,7 @@
 #SBATCH --output=test_full.%j.out
 #SBATCH --error=test_full.%j.err
 ##format could be dd-hh:mm:ss, hh:mm:ss, mm:ss, or mm
-#SBATCH --time=6:00:00
+#SBATCH --time=2:00:00
 # We are submitting to the dev partition, there are several on sherlock: normal, gpu, bigmem (jobs requiring >64Gigs RAM)
 #SBATCH -p normal
 #SBATCH --mem=4G
