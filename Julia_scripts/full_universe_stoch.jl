@@ -1,9 +1,12 @@
 # Patricia Levi
 # pjlevi@stanford.edu
 
-# TODO:
-# X--- write outputs to csv
-# --- make subselection of solar/wind_avail work with random subsets of timesteps
+# TODO
+# change filepath for output writing
+# ----- change file structure in sherlock to match below
+# better file org for scenario files
+# set up tests for runtime on sherlock (different # time periods, omegas)
+# think about benders, binary relaxation, how to reduce problem size
 
 # PARAMS USED FOR IDENTIFYING CORRECT FILE #
 timeseriesID = "528h2groups"
@@ -35,10 +38,10 @@ using JuMP
 using Gurobi
 using DataFrames
 using CSV
+include("convert3dto2d.jl")
+include("make_scenarios.jl")
 
 test = Gurobi.Env() # test that gurobi is working
-
-include("convert3dto2d.jl")
 
 ### FILE PATHS ###
 if Sherlock
@@ -73,8 +76,21 @@ dem = dem2[hours,2]
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
 probs = CSV.read(string(base_data_fol , "dist_input_n",n_omega,"_",stochID,".csv"))
-vdr = convert(Array,probs[1,:]) # converts the first row of probs to an Array
-pro = convert(Array,probs[2,:])
+vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
+pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
+    # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
+
+test = make_scenarios(n_periods,t_firsts,vdr_in, pro_in)
+vdr = test[1]
+pro = test[2]
+if sum(pro) != 1
+    error("sum of probabilities is not one")
+end
+n_omega = length(pro) #redefine for new number of scenarios
+
+# to check vdr and p are constructed properly
+# writecsv("vdr_test.csv",vdr)
+# writecsv("p_test.csv",pro')
 
 genset = CSV.read(string(base_data_fol,"gen_merged_withIDs.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces

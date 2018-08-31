@@ -21,13 +21,14 @@ function make_scenarios(n_timesteps,t_firsts,vdr_og,p_og)
     # - each column is a time period
     # - data is the probability of the base scenario
 
-    prob_array = Array{Float64}(n_new_scenarios,Tp)
+    prob_array = Array{Rational}(n_new_scenarios,Tp) #rational type avoids rounding error
     #iterate through columns
     for i in 1:Tp
         prob_array[:,i] = repeat(vec(p_og),inner = n_omega^(Tp-i),outer = n_omega^(i-1))
     end
     # can use prod() to get row-wise products.
     p = prod(prob_array,2)
+    # p = round.(p, 10)
 
     # create vdr[t,o]
     # - each row is a timestep
