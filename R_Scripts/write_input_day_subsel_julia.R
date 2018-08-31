@@ -12,12 +12,18 @@
 # day input is given as day of year
 library(lubridate)
 library(tidyverse)
-gams_folder = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/"
-output_folder = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/20days/"
+gams_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/"
+output_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/julia_input/"
 
 ##### randomly select 12 weeks out of the year ####
 # one in each month
 ##output should be a set of firstdays
+
+demand = read.csv(file = paste0(gams_folder,"demand_2015.csv"), header = F)
+demand$hour = as.numeric(substring(demand$V1,2,10))
+
+# ggplot(demand,aes(y=V2, x = hour)) + geom_line() + labs(y="demand (MWh)", title = "whole year demand")
+
 firstdays = c()
 days = c()
 ndays = 5
@@ -33,19 +39,19 @@ for(i in 1:12){
 firstdays
 days
 
-makeoutputs(days = days, firstdays = firstdays, gams_folder,output_folder, id = "h")
+makeoutputs(days = days, firstdays = firstdays, gams_folder = gams_fol,output_folder = output_fol)
 
 
 #### choose two 10 day intervals around the january and the summer peak
 output_folder = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/20days/"
-peaks = which(r>(8760-4))
+peaks = which(rank(demand$V2)>(8760-4))
 # [1]  439  440  441 4960
-peaks = c(439, 4960) #these are hours. Need to identify day
+peaks = c(440, 4960) #these are hours. Need to identify day
 peaks_day = round(peaks/24,0)
 first = peaks_day - 5
 alldays = c(first[1]:(first[1]+10),first[2]:(first[2]+10))
 
-makeoutputs(firstdays = first, days = alldays, gams_folder,output_folder, id = "h")
+makeoutputs(firstdays = first, days = alldays, gams_folder = gams_fol,output_folder = output_fol)
 
 
 ##### specify desired days #####
@@ -70,6 +76,8 @@ for(i in 3:8){
 }
 
 ################################
+# MAKEOUTPUTS FUNCTION BEGIN
+################################
 makeoutputs = function(days, firstdays, id, gams_folder, output_folder){
   
   if(sum(duplicated(days))>0) {stop("days are duplicated")}
@@ -77,28 +85,32 @@ makeoutputs = function(days, firstdays, id, gams_folder, output_folder){
   
   nhours = length(days) *24
   
+  # create a unique identifier for this set of files
   if(missing(id)){
-    id = paste0("h",length(firstdays),"groups")
+    id = paste0(nhours,"h",length(firstdays),"groups")
   }
+  
+  if(!file.exists(paste(output_folder,id, sep=""))){
+    dir.create(paste(output_folder,id, sep=""))
+  }
+  
   #### write periods ####
   hours = c()
   for(i in 1:length(days)){
     dayhours = (24*days[i]):(24*days[i]+23)
     hours = c(hours, dayhours)
   }
-  # hours
-  # periods = paste0("h",hours)
-  # periods
+
   periods = hours
-  write.table(matrix(periods, ncol=1), file= paste0(output_folder,"periods_",nhours,id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
+  write.table(matrix(periods, ncol=1), file= paste0(output_folder,id,"/periods_",id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
   
   # first_periods = paste0("h",24*firstdays)
   first_periods = 24*firstdays
-  write.table(matrix(first_periods, ncol=1), file= paste0(output_folder,"first_periods_",nhours,id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
+  write.table(matrix(first_periods, ncol=1), file= paste0(output_folder,id,"/first_periods_",id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
   
   #remove first_periods from periods list to make notfirst_periods
   firstsel = hours %in% (24*firstdays)
-  write.table(matrix(periods[!firstsel], nrow=1), file= paste0(output_folder,"notfirst_periods_",nhours,id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
+  write.table(matrix(periods[!firstsel], ncol=1), file= paste0(output_folder,id,"/notfirst_periods_",id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
   
   ###### solar input ####
   # load full dataset
@@ -109,18 +121,8 @@ makeoutputs = function(days, firstdays, id, gams_folder, output_folder){
   # ugh this doesnt do row names
   
   solar_input = solar[hours,]
-  # head(solar_subsel)
-  
-  solar_assign = matrix(nrow=nrow(solar_input)*ncol(solar_input),ncol=1)
-  counter = 1
-  for(r in 1:nrow(solar_input)){
-    for(c in 1:ncol(solar_input)){
-      solar_assign[counter] = paste("pf('",row.names(solar_input)[r],"','",colnames(solar_input)[c], "') = ", round(solar_input[r,c],4)," ;",sep="")
-      counter = counter+1
-    }
-  }
-  
-  write.table(file = paste0(output_folder,"solar_input_",nhours,id,".txt"),solar_assign, quote = FALSE,row.names = FALSE, col.names = FALSE)
+
+  write.table(file = paste0(output_folder,id,"/solar_input_",id,".txt"),solar_input, quote = FALSE,row.names = FALSE, col.names = TRUE, sep=",")
   
   ######## wind input ######
   # load full dataset
@@ -128,15 +130,7 @@ makeoutputs = function(days, firstdays, id, gams_folder, output_folder){
   colnames(wind) = c("WIND-1","WIND-2","WIND-3")
   
   wind_input = wind[hours,]
-  wind_assign = matrix(nrow=nrow(wind_input)*ncol(wind_input),ncol=1)
-  counter = 1
-  for(r in 1:nrow(wind_input)){
-    for(c in 1:ncol(wind_input)){
-      wind_assign[counter] = paste("pf('",row.names(wind_input)[r],"','",colnames(wind_input)[c], "') = ", round(wind_input[r,c],4)," ;",sep="")
-      counter = counter+1
-    }
-  }
-  write.table(file = paste0(output_folder,"wind_input_",nhours,id,".txt"),wind_assign, quote = FALSE,row.names = FALSE, col.names = FALSE)
+  write.table(file = paste0(output_folder,id,"/wind_input_",id,".txt"),wind_input, quote = FALSE,row.names = FALSE, col.names = TRUE, sep = ",")
   
   ##### demand response availability ####
   # dr = read.table(file = paste0(gams_folder,"dr_MOO_availability.csv"), sep=",", row.names = 1, header=T)
@@ -144,29 +138,17 @@ makeoutputs = function(days, firstdays, id, gams_folder, output_folder){
   colnames(dr) = c("DR-1")
   
   dr_input = as_tibble(dr)[hours,] #matrices and dataframes return a vector if only one column >.<
-  dr_assign = matrix(nrow=nrow(dr_input)*ncol(dr_input),ncol=1)
-  counter = 1
-  for(r in 1:nrow(dr_input)){
-    for(c in 1:ncol(dr_input)){
-      dr_assign[counter] = paste("pf('h",hours[r],"','",colnames(dr_input)[c], "') = ", round(dr_input[r,c],4)," ;",sep="")
-      counter = counter+1
-    }
-  }
-  write.table(file = paste0(output_folder,"dr_input_",nhours,id,".txt"),dr_assign, quote = FALSE,row.names = FALSE, col.names = FALSE)
+  write.table(file = paste0(output_folder,id,"/dr_input_",id,".txt"),dr_input, quote = FALSE,row.names = FALSE, col.names = TRUE, sep=",")
   
   ##### demand data ######
   # load demand data
   demand = read.csv(file = paste0(gams_folder,"demand_2015.csv"), header = F)
-  
   new_demand = demand[hours,]
+  colnames(new_demand) = c("hour","demand")
+  new_demand$hour = substr(new_demand$hour,2,100)
   
-  write.table(new_demand, quote = FALSE,file = paste0(output_folder,"demand_2015_",nhours,id,".csv"),col.names = FALSE, sep = "," ,row.names = F)
-} #endfunction
-
-
-
-
-demand = read.csv(file = paste0(gams_folder,"demand_2015.csv"), header = F)
-demand$hour = as.numeric(substring(demand$V1,2,10))
-
-ggplot(demand,aes(y=V2, x = hour)) + geom_line() + labs(y="demand (MWh)", title = "whole year demand")
+  write.table(new_demand, quote = FALSE,file = paste0(output_folder,id,"/demand_2015_",id,".csv"),col.names = TRUE, sep = "," ,row.names = F)
+} 
+################################
+# MAKEOUTPUTS FUNCTION END
+################################

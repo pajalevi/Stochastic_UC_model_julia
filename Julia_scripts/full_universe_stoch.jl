@@ -3,14 +3,25 @@
 
 # TODO:
 # X--- write outputs to csv
-# --- make subselection of solar/wind_avail less dependent on n_t
+# --- make subselection of solar/wind_avail work with random subsets of timesteps
 
-# on sherlock?
-Sherlock = false
+# PARAMS USED FOR IDENTIFYING CORRECT FILE #
+timeseriesID = "528h2groups"
+n_periods = 528 # Must be the same as the first number in timeseriesID
+
+stochID = "m0.9_0.8pp"
+n_omega=5 #number of realizations
+
+sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/"
+laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/julia_input/"
+Sherlock = false # on sherlock? where are folders?
+
+# OTHER PARAMS #
+dr_varcost = 10000 #for overriding variable cost to test things
 
 # For SHERLOCK:
 if Sherlock
-    #Pkg.update()
+    # Pkg.update()
     # Pkg.add("JuMP")
     # #Pkg.add("Clp")
     # Pkg.add("Gurobi")
@@ -20,7 +31,7 @@ if Sherlock
 end
 
 using JuMP
-#using Clp 
+#using Clp
 using Gurobi
 using DataFrames
 using CSV
@@ -31,38 +42,41 @@ include("convert3dto2d.jl")
 
 ### FILE PATHS ###
 if Sherlock
-    default_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/48h_full"
+    default_fol = sherlock_fol
 else
-    default_fol =
-    "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Julia_scripts/julia_inputs/48h_full"
+    default_fol = laptop_fol
     # data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
     # unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
     # scen_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/uniform_distributions"
 end
-
-# PARAMS USED FOR IDENTIFYING CORRECT FILE #
-n_periods = 48
-n_omega=5 #number of realizations
-# t_firsts=1 ,20# index of timesteps that are 'first' of a timeblock
-# t_notfirst = vcat([2:19...],[21:24...])
-dr_varcost = 10000 #for overriding variable cost to test things
+base_data_fol = string(default_fol,"default/")
+subsel_data_fol = string(default_fol,timeseriesID,"/")
 
 ### READ IN DATA ###
-dem2 = CSV.read(string(default_fol , "/demand_2015_" , n_periods , ".csv"),
-                datarow=1)
-dem = dem2[2]
+first_periods = CSV.read(string(subsel_data_fol,"first_periods_",timeseriesID,".csv"),datarow=1)[1]
+notfirst_periods = CSV.read(string(subsel_data_fol,"notfirst_periods_",timeseriesID,".csv"),datarow=1)[1]
+hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1)[1]
+if length(hours)!=n_periods
+    error("n_periods does not match the length of hours")
+end
 
-t_firsts = CSV.read(string(default_fol,"/t_firsts.csv"))[1]
-t_notfirst = CSV.read(string(default_fol,"/t_notfirsts.csv"))[1]
+# convert first and notfirst periods to indices
+t_firsts = findin(hours, first_periods)
+t_notfirst = findin(hours, notfirst_periods)
+
+dem2 = CSV.read(string(base_data_fol, "demand_2015.csv"),datarow=1)
+# subselect for just the rows corresponding to 'hours'
+dem = dem2[hours,2]
+
 
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(default_fol , "/dist_input_n",n_omega,"_m0.9_0.8pp.csv"))
+probs = CSV.read(string(default_fol , "/dist_input_n",n_omega,"_",stochID,".csv"))
 vdr = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro = convert(Array,probs[2,:])
 
-genset = CSV.read(string(default_fol,"/gen_merged_withIDs.csv"), missingstring ="NA")
+genset = CSV.read(string(base_data_fol,"/gen_merged_withIDs.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -99,6 +113,7 @@ n_gf = length(fast_ind)
 n_gdr = length(dr_ind) #number of DR generators
 n_t = n_periods# number of timesteps
 
+
 ### SETS ###
 TIME = 1:n_t
 SCENARIOS = 1:n_omega
@@ -126,8 +141,8 @@ pf = convert(Array{Float64},pf)
 
 
 # load wind, solar info
-solar_avail = CSV.read(string(default_fol,"/solar_input_8760.txt"))
-wind_avail = CSV.read(string(default_fol,"/wind_input_8760.txt"))
+solar_avail = CSV.read(string(base_data_fol,"/solar_input_8760.txt"))
+wind_avail = CSV.read(string(base_data_fol,"/wind_input_8760.txt"))
 # remove first col of each
 solar_avail = solar_avail[:,2:ncol(solar_avail)]
 wind_avail = wind_avail[:,2:ncol(wind_avail)]
@@ -138,7 +153,7 @@ for i in 1:length(names(solar_avail))
     # print(convert(String, col))
     ind = findin(genset[:plantUnique],[convert(String, col)])
     # print(ind)
-    pf[ind,:] = solar_avail[1:n_t,i]
+    pf[ind,:] = solar_avail[hours,i]
 end
 
 for i in 1:length(names(wind_avail))
@@ -146,7 +161,7 @@ for i in 1:length(names(wind_avail))
     # print(convert(String, col))
     ind = findin(genset[:plantUnique],[convert(String, col)])
     # print(ind)
-    pf[ind,:] = wind_avail[1:n_t,i]
+    pf[ind,:] = wind_avail[hours,i]
 end
 
 
