@@ -14,7 +14,7 @@ n_omega=5 #number of realizations
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/"
 laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/julia_input/"
-Sherlock = false # on sherlock? where are folders?
+Sherlock = true # on sherlock? where are folders?
 
 # OTHER PARAMS #
 dr_varcost = 10000 #for overriding variable cost to test things
@@ -72,11 +72,11 @@ dem = dem2[hours,2]
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(default_fol , "/dist_input_n",n_omega,"_",stochID,".csv"))
+probs = CSV.read(string(base_data_fol , "dist_input_n",n_omega,"_",stochID,".csv"))
 vdr = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro = convert(Array,probs[2,:])
 
-genset = CSV.read(string(base_data_fol,"/gen_merged_withIDs.csv"), missingstring ="NA")
+genset = CSV.read(string(base_data_fol,"gen_merged_withIDs.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -141,8 +141,8 @@ pf = convert(Array{Float64},pf)
 
 
 # load wind, solar info
-solar_avail = CSV.read(string(base_data_fol,"/solar_input_8760.txt"))
-wind_avail = CSV.read(string(base_data_fol,"/wind_input_8760.txt"))
+solar_avail = CSV.read(string(base_data_fol,"solar_input_8760.txt"))
+wind_avail = CSV.read(string(base_data_fol,"wind_input_8760.txt"))
 # remove first col of each
 solar_avail = solar_avail[:,2:ncol(solar_avail)]
 wind_avail = wind_avail[:,2:ncol(wind_avail)]
