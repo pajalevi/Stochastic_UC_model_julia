@@ -1,26 +1,56 @@
+# full_universe_stoch.jl
+# solves the full universe version of a stochastic two stage
+# unit-commitment model in which slow generators are committed in the
+# first stage and fast generators can be committed in real time.
+# Demand response functions as a slow generator with an advance commmitment
+# not only of startup but also to a generation schedule
+# The only uncertainty modeled is that of the actual DR generation
+# Written under Julia 0.6.4
 # Patricia Levi
 # pjlevi@stanford.edu
 
-# TODO
-# change filepath for output writing
+# TODO --------------------------------------
+# X change filepath for output writing
 # ----- change file structure in sherlock to match below
-# better file org for scenario files
+# X ----- file structure: home folder(outputs(output ID), inputs(base, timeseriesID))
+# X better file org for scenario input files
+# check if output folder exists before creating it
 # set up tests for runtime on sherlock (different # time periods, omegas)
 # think about benders, binary relaxation, how to reduce problem size
+# develop better way to differentiate between slow and fast generators
+#       papavasiliou denotes any generator <300 MW(?) as fast, all others slow
+# look at output to sanity check.
+#       graph output levels along with demand levels
+#       look at marginal prices over time (cannot just look at shadow price
+#            because the binary problem means theres no useful dual variable.
+#            Instead I can look at the max price of dispatched generators at
+#            each timestep)
+# -------------------------------------------
 
-# PARAMS USED FOR IDENTIFYING CORRECT FILE #
+######### USER CONTROLS ##########
+# Params to identify correct files #
 timeseriesID = "528h2groups"
 n_periods = 528 # Must be the same as the first number in timeseriesID
 
 stochID = "m0.9_0.8pp"
 n_omega=5 #number of realizations
 
-sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/"
+outputID = "base_testing" #which output folder? what set is this run a part of?
+
+sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
+sherlock_input_file = "inputs/"
+sherlock_output_file = "outputs/"
 laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/julia_input/"
-Sherlock = true # on sherlock? where are folders?
+laptop_input_file = "julia_input/"
+laptop_output_file = "julia_output/"
+
+Sherlock = false # on sherlock? where are folders?
 
 # OTHER PARAMS #
+dr_override = true # set to true for below value to be used
 dr_varcost = 10000 #for overriding variable cost to test things
+
+####### END USER CONTROLS ##########
 
 # For SHERLOCK:
 if Sherlock
@@ -45,15 +75,16 @@ test = Gurobi.Env() # test that gurobi is working
 
 ### FILE PATHS ###
 if Sherlock
-    default_fol = sherlock_fol
+    base_fol = sherlock_fol
+    input_fol = string(sherlock_fol,sherlock_input_file)
+    output_fol = string(sherloc_fol, sherlock_output_file, outputID,"/")
 else
-    default_fol = laptop_fol
-    # data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/simple"
-    # unformat_data_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data"
-    # scen_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/gams_input/uniform_distributions"
+    base_fol = laptop_fol
+    input_fol = string(laptop_fol,laptop_input_file)
+    output_fol = string(laptop_fol, laptop_output_file, outputID,"/")
 end
-base_data_fol = string(default_fol,"default/")
-subsel_data_fol = string(default_fol,timeseriesID,"/")
+default_data_fol = string(input_fol,"default/")
+subsel_data_fol = string(input_fol,timeseriesID,"/")
 
 ### READ IN DATA ###
 first_periods = CSV.read(string(subsel_data_fol,"first_periods_",timeseriesID,".csv"),datarow=1)[1]
@@ -67,7 +98,7 @@ end
 t_firsts = findin(hours, first_periods)
 t_notfirst = findin(hours, notfirst_periods)
 
-dem2 = CSV.read(string(base_data_fol, "demand_2015.csv"),datarow=1)
+dem2 = CSV.read(string(default_data_fol, "demand_2015.csv"),datarow=1)
 # subselect for just the rows corresponding to 'hours'
 dem = dem2[hours,2]
 
@@ -75,7 +106,7 @@ dem = dem2[hours,2]
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(base_data_fol , "dist_input_n",n_omega,"_",stochID,".csv"))
+probs = CSV.read(string(default_data_fol , "dist_input_n",n_omega,"_",stochID,".csv"))
 vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
@@ -92,13 +123,12 @@ n_omega = length(pro) #redefine for new number of scenarios
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
 
-genset = CSV.read(string(base_data_fol,"gen_merged_withIDs.csv"), missingstring ="NA")
+genset = CSV.read(string(default_data_fol,"gen_merged_withIDs.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
 
 # how do I select which rows match one of a set of strings?
-# i.e. to pull out the slow, fast generators...
 # in("c",["a","b","c"]) # ask if "c" is contained in set of interest
 # useful: https://cbrownley.wordpress.com/2015/07/26/intro-to-julia-filtering-rows-with-r-python-and-julia/
 #          data_frame_value_in_set =
@@ -122,12 +152,47 @@ dr_ind = findin(genset[:Fuel],dr_gens)
 slow_ind = findin(genset[:Fuel],slow_gens)
 fast_ind = findin(genset[:Fuel],fast_gens)
 
-# AUTO PARAMETERS ###
+#generator min and max
+pmin = genset[:PMin]
+pmax = genset[:Capacity]
+startup = genset[:StartCost]
+varcost = genset[:VCost]
+# for manual override of DR variable cost
+if dr_override
+    varcost[dr_ind] = dr_varcost
+end
+
+#generator availability
+pf = repeat([1], inner = [n_g, n_t])
+pf = convert(Array{Float64},pf)
+
+
+# load wind, solar info
+solar_avail = CSV.read(string(default_data_fol,"solar_input_8760.txt"))
+wind_avail = CSV.read(string(default_data_fol,"wind_input_8760.txt"))
+# remove first col of each
+solar_avail = solar_avail[:,2:ncol(solar_avail)]
+wind_avail = wind_avail[:,2:ncol(wind_avail)]
+# loop through all colnames, use findin(genset[:plantUnique],XX) to get row
+# sub in new info
+for i in 1:length(names(solar_avail))
+    col = names(solar_avail)[i]
+    ind = findin(genset[:plantUnique],[convert(String, col)])
+    pf[ind,:] = solar_avail[hours,i]
+end
+
+for i in 1:length(names(wind_avail))
+    col = names(wind_avail)[i]
+    ind = findin(genset[:plantUnique],[convert(String, col)])
+    pf[ind,:] = wind_avail[hours,i]
+end
+
+# MODEL PARAMS ###
 n_gsl= length(slow_ind)# number of slow generators
 n_g =nrow(genset)# number of generators
 n_gf = length(fast_ind)
 n_gdr = length(dr_ind) #number of DR generators
-n_t = n_periods# number of timesteps
+n_t = n_periods # number of timesteps
 
 
 ### SETS ###
@@ -138,48 +203,6 @@ GEN_NODR = findin(genset[:Fuel],notdr_gens)
 GF = fast_ind
 GSL = slow_ind #slow generators
 GDR = dr_ind #DR generators
-
-#generator min and max
-#pmin = repeat([1],inner = n_g)
-pmin = genset[:PMin]
-# pmax = repeat([10],outer = n_g)
-pmax = genset[:Capacity]
-# startup = [0;repeat([2],inner = n_gsl -n_gdr);repeat([1], inner = n_gf)]
-startup = genset[:StartCost]
-#varcost = [0;repeat([1],inner = n_gsl -n_gdr);repeat([2], inner = n_gf)]
-# varcost = [0;collect(1:0.1:(1+0.1*(n_gsl-n_gdr)));collect(2:0.1:(2+0.1*(n_gf)))]
-varcost = genset[:VCost]
-varcost[dr_ind] = dr_varcost
-
-#generator availability
-pf = repeat([1], inner = [n_g, n_t])
-pf = convert(Array{Float64},pf)
-
-
-# load wind, solar info
-solar_avail = CSV.read(string(base_data_fol,"solar_input_8760.txt"))
-wind_avail = CSV.read(string(base_data_fol,"wind_input_8760.txt"))
-# remove first col of each
-solar_avail = solar_avail[:,2:ncol(solar_avail)]
-wind_avail = wind_avail[:,2:ncol(wind_avail)]
-# loop through all colnames, use findin(genset[:plantUnique],XX) to get row
-# sub in new info
-for i in 1:length(names(solar_avail))
-    col = names(solar_avail)[i]
-    # print(convert(String, col))
-    ind = findin(genset[:plantUnique],[convert(String, col)])
-    # print(ind)
-    pf[ind,:] = solar_avail[hours,i]
-end
-
-for i in 1:length(names(wind_avail))
-    col = names(wind_avail)[i]
-    # print(convert(String, col))
-    ind = findin(genset[:plantUnique],[convert(String, col)])
-    # print(ind)
-    pf[ind,:] = wind_avail[hours,i]
-end
-
 
 ### MODEL ###
 # m = Model(solver = ClpSolver())
@@ -273,23 +296,15 @@ m = Model(solver=GurobiSolver(Presolve=0))
 status = solve(m)
 @printf("Status: %s\n", status)
 
-# ok, it solves. Now I just need to figure out how to reasonably
-# plot the output so I can check it -- refer to R files to get a
-# point of comparison for how I manipulated stuff...
 
-# TODO: pull electricity price. this should be shadow price
-# of supply-demand constraint
-# use getdual(<nameofconstraint>)
-# so I need to name the constraint
-# ok but this does not exist for mixed integer problems. dang
-# should look at max var cost of dispatched plants
+mkdir(output_fol)
 
 # check production
 print("schedule of DR")
 x = getvalue(p_dr)
 x_df = DataFrame(transpose(x))
 names!(x_df,[Symbol("$input") for input in genset[dr_ind,:plantUnique]])
-CSV.write(string(default_fol,"/DR_schedule.csv"), x_df)
+CSV.write(string(output_fol,"/DR_schedule.csv"), x_df)
 
 # display(x)
 print("production of DR:")
@@ -298,7 +313,7 @@ y = getvalue(p[GDR,:,:])
 y_out = convert3dto2d(y,1, 3,  2,
     vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
      genset[dr_ind,:plantUnique])
-CSV.write(string(default_fol,"/DR_production.csv"), y_out)
+CSV.write(string(output_fol,"/DR_production.csv"), y_out)
 
 # display(y)
 print("production of slow generators:")
@@ -307,7 +322,7 @@ zs = getvalue(p[GSL,:,:])
 y_out = convert3dto2d(zs,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[slow_ind,:plantUnique])
-CSV.write(string(default_fol,"/slow_production.csv"), y_out)
+CSV.write(string(output_fol,"/slow_production.csv"), y_out)
 
 # display(zs)
 print("production of fast generators:")
@@ -315,7 +330,7 @@ zf = getvalue(p[GF,:,:])
 y_out = convert3dto2d(zf,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[fast_ind,:plantUnique])
-CSV.write(string(default_fol,"/fast_production.csv"), y_out)
+CSV.write(string(output_fol,"/fast_production.csv"), y_out)
 # display(zf)
 
 # check commitment
@@ -324,13 +339,13 @@ print("commitment of slow generators:")
 w_out = getvalue(w)
 wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-CSV.write(string(default_fol,"/slow_commitment.csv"), wdf)
+CSV.write(string(output_fol,"/slow_commitment.csv"), wdf)
 
 print("startup of slow generators:")
 z_out = getvalue(z)
 zdf = DataFrame(transpose(z_out))
 names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-CSV.write(string(default_fol,"/slow_startup.csv"), zdf)
+CSV.write(string(output_fol,"/slow_startup.csv"), zdf)
 
 # display(getvalue(z))
 
@@ -340,7 +355,7 @@ u_out = getvalue(u)
 y_out = convert3dto2d(u_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
-CSV.write(string(default_fol,"/u_commitment.csv"), y_out)
+CSV.write(string(output_fol,"/u_commitment.csv"), y_out)
 
 print("startup of all generators")
 # display(getvalue(v))
@@ -348,7 +363,7 @@ v_out = getvalue(v)
 y_out = convert3dto2d(v_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
-CSV.write(string(default_fol,"/v_startup.csv"), y_out)
+CSV.write(string(output_fol,"/v_startup.csv"), y_out)
 
 # check costs
 print("total cost")
@@ -374,4 +389,4 @@ output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
                             FracStartupCost = totstartupcost/totcost,
                             FracVarCost = totvarcost/totcost)
 
-CSV.write(string(default_fol,"/summary_stats.csv"), output_summary)
+CSV.write(string(output_fol,"/summary_stats.csv"), output_summary)
