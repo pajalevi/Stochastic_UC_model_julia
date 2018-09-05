@@ -14,8 +14,8 @@
 # ----- change file structure in sherlock to match below
 # X ----- file structure: home folder(outputs(output ID), inputs(base, timeseriesID))
 # X better file org for scenario input files
-# check if output folder exists before creating it
-# set up tests for runtime on sherlock (different # time periods, omegas)
+# X check if output folder exists before creating it
+# X set up tests for runtime on sherlock (different # time periods, omegas)
 # think about benders, binary relaxation, how to reduce problem size
 # develop better way to differentiate between slow and fast generators
 #       papavasiliou denotes any generator <300 MW(?) as fast, all others slow
@@ -25,26 +25,47 @@
 #            because the binary problem means theres no useful dual variable.
 #            Instead I can look at the max price of dispatched generators at
 #            each timestep)
+# X make sherlock = true an argument that can be passed in when calling file
+# X make debug switch that can be used to run everything up to model solve
 # -------------------------------------------
 
+
+### handle command line args ###
+# cmd line format should be include("full_universe_stoch.jl") <timeseriesID> <stochID> <outputID>
 ######### USER CONTROLS ##########
-# Params to identify correct files #
-timeseriesID = "528h2groups"
-n_periods = 528 # Must be the same as the first number in timeseriesID
+debug = true # stops execution before solving model
 
-stochID = "m0.9_0.8pp"
-n_omega=5 #number of realizations
+# Parse ARGS #
+defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing"]
+localARGS = length(ARGS) > 0 ? ARGS : defaultARGS
+nargs = length(localARGS)
+@show localARGS
 
-outputID = "base_testing" #which output folder? what set is this run a part of?
+if nargs == 3
+    timeseriesID = localARGS[1]
+    stochID = localARGS[2]
+    outputID = localARGS[3]
+elseif nargs > 3
+    error("ERROR: Too many arguments supplied. Need <timeseriesID> <stochID> <outputID>")
+else
+    warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID>")
+end
+n_periods = parse(Int64,split(timeseriesID,"h")[1]) # Must be the same as the first number in timeseriesID
+n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #number of realizations
+
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
 sherlock_output_file = "outputs/"
-laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/julia_input/"
+laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/"
 laptop_input_file = "julia_input/"
 laptop_output_file = "julia_output/"
 
-Sherlock = false # on sherlock? where are folders?
+if split(pwd(),"/")[2] == "Users"
+    Sherlock = false
+else
+    Sherlock = true # on sherlock? where are folders?
+end
 
 # OTHER PARAMS #
 dr_override = true # set to true for below value to be used
@@ -77,7 +98,7 @@ test = Gurobi.Env() # test that gurobi is working
 if Sherlock
     base_fol = sherlock_fol
     input_fol = string(sherlock_fol,sherlock_input_file)
-    output_fol = string(sherloc_fol, sherlock_output_file, outputID,"/")
+    output_fol = string(sherlock_fol, sherlock_output_file, outputID,"/")
 else
     base_fol = laptop_fol
     input_fol = string(laptop_fol,laptop_input_file)
@@ -106,7 +127,7 @@ dem = dem2[hours,2]
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(default_data_fol , "dist_input_n",n_omega,"_",stochID,".csv"))
+probs = CSV.read(string(default_data_fol , "dist_input_n",stochID,".csv"))
 vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
@@ -162,7 +183,14 @@ if dr_override
     varcost[dr_ind] = dr_varcost
 end
 
-#generator availability
+# Generator PARAMS ###
+n_gsl= length(slow_ind)# number of slow generators
+n_g =nrow(genset)# number of generators
+n_gf = length(fast_ind)
+n_gdr = length(dr_ind) #number of DR generators
+n_t = n_periods # number of timesteps
+
+## generator availability ##
 pf = repeat([1], inner = [n_g, n_t])
 pf = convert(Array{Float64},pf)
 
@@ -186,13 +214,6 @@ for i in 1:length(names(wind_avail))
     ind = findin(genset[:plantUnique],[convert(String, col)])
     pf[ind,:] = wind_avail[hours,i]
 end
-
-# MODEL PARAMS ###
-n_gsl= length(slow_ind)# number of slow generators
-n_g =nrow(genset)# number of generators
-n_gf = length(fast_ind)
-n_gdr = length(dr_ind) #number of DR generators
-n_t = n_periods # number of timesteps
 
 
 ### SETS ###
@@ -290,14 +311,18 @@ m = Model(solver=GurobiSolver(Presolve=0))
 
 # Check model
 # print(m)
+if debug
+    error("just testing model so we are stopping here")
+end
 
 # Solve the model
 @printf("\nSolving:\n")
 status = solve(m)
 @printf("Status: %s\n", status)
 
-
-mkdir(output_fol)
+if !isdir(output_fol)
+    mkdir(output_fol)
+end
 
 # check production
 print("schedule of DR")
