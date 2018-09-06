@@ -11,7 +11,7 @@
 
 # TODO --------------------------------------
 # X change filepath for output writing
-# ----- change file structure in sherlock to match below
+# X ----- change file structure in sherlock to match below
 # X ----- file structure: home folder(outputs(output ID), inputs(base, timeseriesID))
 # X better file org for scenario input files
 # X check if output folder exists before creating it
@@ -27,6 +27,11 @@
 #            each timestep)
 # X make sherlock = true an argument that can be passed in when calling file
 # X make debug switch that can be used to run everything up to model solve
+# 'keep' does not seem to work for Julia 1.0
+# upgrade code to Julia 0.7 (which has depracation warnings for 1.0)
+# upload newest version with submission scripts to sherlock
+# save workspace to output folder using JLD2
+# save probabilities and characteristics of new scenarios in output folder
 # -------------------------------------------
 
 
@@ -51,8 +56,12 @@ else
     warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID>")
 end
 n_periods = parse(Int64,split(timeseriesID,"h")[1]) # Must be the same as the first number in timeseriesID
-n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #number of realizations
-
+n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken in julia 1.0 #number of realizations
+@show timeseriesID
+@show stochID
+@show outputID
+@show n_omega
+@show n_periods
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
@@ -127,7 +136,7 @@ dem = dem2[hours,2]
 # STOCHASTIC PARAMS #
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(default_data_fol , "dist_input_n",stochID,".csv"))
+probs = CSV.read(string(default_data_fol , "dist_input_",stochID,".csv"))
 vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
@@ -191,8 +200,8 @@ n_gdr = length(dr_ind) #number of DR generators
 n_t = n_periods # number of timesteps
 
 ## generator availability ##
-pf = repeat([1], inner = [n_g, n_t])
-pf = convert(Array{Float64},pf)
+pf = repeat([1.0], inner = [n_g, n_t])
+#pf = convert(Array{Float64},pf)
 
 
 # load wind, solar info
@@ -224,6 +233,8 @@ GEN_NODR = findin(genset[:Fuel],notdr_gens)
 GF = fast_ind
 GSL = slow_ind #slow generators
 GDR = dr_ind #DR generators
+# need an index for where the DR is in the slow generators
+GDR_SL_ind = findin(GSL,GDR)
 
 ### MODEL ###
 # m = Model(solver = ClpSolver())
@@ -261,7 +272,7 @@ m = Model(solver=GurobiSolver(Presolve=0))
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
 #GENMAXDR
 @constraint(m,[g = 1:n_gdr, t = 1:n_t],
-    p_dr[g,t] <= pmax[GDR[g]] * w[g,t] * pf[g,t]) #needed for p_da
+    p_dr[g,t] <= pmax[GDR[g]] * w[DR_SL_ind[g],t] * pf[DR_SL_ind[g],t]) #needed for p_da
 #START_S
 # @constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
     # z[g,t+1] == w[g,t+1] - w[g,t])
@@ -292,10 +303,6 @@ m = Model(solver=GurobiSolver(Presolve=0))
 # would need to change SUPPLY-DEMAND, GENMAX, and potentially startup/commitment too,
 # since these rely on the GENERATORS index...
 
-# another workaround could be to list DR resources first
-# so that the indices are the same for both.
-# this is kinda hack-y but functional and perhaps cleaner
-# for the equations. Lets go with this for now
 @constraint(m, [g=1:n_gdr,t = TIME, o = SCENARIOS],
      p[GDR[g],t,o] == p_dr[g,t] * vdr[o])
 
@@ -412,6 +419,8 @@ display("text/plain",totvarcost/totcost)
 output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
                             TotVarCst = totvarcost,
                             FracStartupCost = totstartupcost/totcost,
-                            FracVarCost = totvarcost/totcost)
+                            FracVarCost = totvarcost/totcost,
+                            timeseries = timeseriesID,
+                            stoch_scenario = stochID)
 
 CSV.write(string(output_fol,"/summary_stats.csv"), output_summary)
