@@ -29,7 +29,7 @@
 # X make debug switch that can be used to run everything up to model solve
 # 'keep' does not seem to work for Julia 1.0
 # upgrade code to Julia 0.7 (which has depracation warnings for 1.0)
-# upload newest version with submission scripts to sherlock
+# X upload newest version with submission scripts to sherlock
 # save workspace to output folder using JLD2
 # save probabilities and characteristics of new scenarios in output folder
 # -------------------------------------------
@@ -38,7 +38,7 @@
 ### handle command line args ###
 # cmd line format should be include("full_universe_stoch.jl") <timeseriesID> <stochID> <outputID>
 ######### USER CONTROLS ##########
-debug = true # stops execution before solving model
+debug = false # stops execution before solving model
 
 # Parse ARGS #
 defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing"]
@@ -84,13 +84,14 @@ dr_varcost = 10000 #for overriding variable cost to test things
 
 # For SHERLOCK:
 if Sherlock
-    # Pkg.update()
+    Pkg.update()
     # Pkg.add("JuMP")
     # #Pkg.add("Clp")
     # Pkg.add("Gurobi")
     # Pkg.add("DataFrames")
     # Pkg.pin("DataFrames",v"0.11.7")
     # Pkg.add("CSV")
+    # Pkg.add("JLD2")
 end
 
 using JuMP
@@ -98,6 +99,7 @@ using JuMP
 using Gurobi
 using DataFrames
 using CSV
+using JLD2
 include("convert3dto2d.jl")
 include("make_scenarios.jl")
 
@@ -272,7 +274,7 @@ m = Model(solver=GurobiSolver(Presolve=0))
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
 #GENMAXDR
 @constraint(m,[g = 1:n_gdr, t = 1:n_t],
-    p_dr[g,t] <= pmax[GDR[g]] * w[DR_SL_ind[g],t] * pf[DR_SL_ind[g],t]) #needed for p_da
+    p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
 #START_S
 # @constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
     # z[g,t+1] == w[g,t+1] - w[g,t])
@@ -303,8 +305,8 @@ m = Model(solver=GurobiSolver(Presolve=0))
 # would need to change SUPPLY-DEMAND, GENMAX, and potentially startup/commitment too,
 # since these rely on the GENERATORS index...
 
-@constraint(m, [g=1:n_gdr,t = TIME, o = SCENARIOS],
-     p[GDR[g],t,o] == p_dr[g,t] * vdr[o])
+@constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
+     p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])
 
 #STARTUP COSTS
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
@@ -331,90 +333,96 @@ if !isdir(output_fol)
     mkdir(output_fol)
 end
 
+# save workspace: m and certain inputs
+# vdr, pro, pf, varcost, various indices...
+try
+    @save string(output_fol,"workspace.jld2") m vdr pro
+end
+
 # check production
-print("schedule of DR")
+# print("schedule of DR")
 x = getvalue(p_dr)
 x_df = DataFrame(transpose(x))
 names!(x_df,[Symbol("$input") for input in genset[dr_ind,:plantUnique]])
-CSV.write(string(output_fol,"/DR_schedule.csv"), x_df)
+CSV.write(string(output_fol,"DR_schedule.csv"), x_df)
 
 # display(x)
-print("production of DR:")
+# print("production of DR:")
 y = getvalue(p[GDR,:,:])
 
 y_out = convert3dto2d(y,1, 3,  2,
     vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
      genset[dr_ind,:plantUnique])
-CSV.write(string(output_fol,"/DR_production.csv"), y_out)
+CSV.write(string(output_fol,"DR_production.csv"), y_out)
 
 # display(y)
-print("production of slow generators:")
+# print("production of slow generators:")
 zs = getvalue(p[GSL,:,:])
 
 y_out = convert3dto2d(zs,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[slow_ind,:plantUnique])
-CSV.write(string(output_fol,"/slow_production.csv"), y_out)
+CSV.write(string(output_fol,"slow_production.csv"), y_out)
 
 # display(zs)
-print("production of fast generators:")
+# print("production of fast generators:")
 zf = getvalue(p[GF,:,:])
 y_out = convert3dto2d(zf,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[fast_ind,:plantUnique])
-CSV.write(string(output_fol,"/fast_production.csv"), y_out)
+CSV.write(string(output_fol,"fast_production.csv"), y_out)
 # display(zf)
 
 # check commitment
-print("commitment of slow generators:")
+# print("commitment of slow generators:")
 # display(getvalue(w))
 w_out = getvalue(w)
 wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-CSV.write(string(output_fol,"/slow_commitment.csv"), wdf)
+CSV.write(string(output_fol,"slow_commitment.csv"), wdf)
 
-print("startup of slow generators:")
+# print("startup of slow generators:")
 z_out = getvalue(z)
 zdf = DataFrame(transpose(z_out))
 names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-CSV.write(string(output_fol,"/slow_startup.csv"), zdf)
+CSV.write(string(output_fol,"slow_startup.csv"), zdf)
 
 # display(getvalue(z))
 
-print("commitment of all generators")
+# print("commitment of all generators")
 # display(getvalue(u))
 u_out = getvalue(u)
 y_out = convert3dto2d(u_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
-CSV.write(string(output_fol,"/u_commitment.csv"), y_out)
+CSV.write(string(output_fol,"u_commitment.csv"), y_out)
 
-print("startup of all generators")
+# print("startup of all generators")
 # display(getvalue(v))
 v_out = getvalue(v)
 y_out = convert3dto2d(v_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
-CSV.write(string(output_fol,"/v_startup.csv"), y_out)
+CSV.write(string(output_fol,"v_startup.csv"), y_out)
 
 # check costs
-print("total cost")
+# print("total cost")
 totcost = getvalue(sum(pro[o] *
     sum(start_cost[g,t,o] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
-display(totcost)
-print("startup cost")
-display("text/plain",getvalue(start_cost))
-print("fraction of total costs that are startup costs")
+# display(totcost)
+# print("startup cost")
+# display("text/plain",getvalue(start_cost))
+# print("fraction of total costs that are startup costs")
 totstartupcost = getvalue(sum(pro[o] *
     sum(start_cost[g,t,o] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
-display("text/plain",totstartupcost/totcost)
-print("fraction of total costs that are var cost")
+# display("text/plain",totstartupcost/totcost)
+# print("fraction of total costs that are var cost")
 totvarcost = getvalue(sum(pro[o] *
     sum(p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
-display("text/plain",totvarcost/totcost)
+# display("text/plain",totvarcost/totcost)
 
 output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
                             TotVarCst = totvarcost,
@@ -423,4 +431,4 @@ output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
                             timeseries = timeseriesID,
                             stoch_scenario = stochID)
 
-CSV.write(string(output_fol,"/summary_stats.csv"), output_summary)
+CSV.write(string(output_fol,"summary_stats.csv"), output_summary)
