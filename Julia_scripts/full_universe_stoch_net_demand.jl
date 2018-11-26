@@ -19,7 +19,7 @@ Currently, two periods can have 100% or 0% correllation. Future iterations
 may allow for actual cross correlation.
 
 command line format should be:
-include("full_universe_stoch.jl") <timeseriesID> <stochID> <outputID>
+include("full_universe_stoch.jl") <timeseriesID> <stochID> <outputID><intlength>
 
 # Written under Julia 0.6.4
 # by Patricia Levi
@@ -67,7 +67,8 @@ if nargs == 3
     timeseriesID = localARGS[1]
     stochID = localARGS[2]
     outputID = localARGS[3]
-elseif nargs > 3
+    intlength = localARGS[4]
+elseif nargs > 4
     error("ERROR: Too many arguments supplied. Need <timeseriesID> <stochID> <outputID>")
 else
     warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID>")
@@ -80,6 +81,7 @@ n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken i
 @show n_omega
 @show n_periods
 
+### set files ###
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
 sherlock_output_file = "outputs/"
@@ -87,6 +89,7 @@ laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/
 laptop_input_file = "julia_input/"
 laptop_output_file = "julia_output/"
 
+# automatically detect if in Sherlock based on file structure
 if split(pwd(),"/")[2] == "Users"
     Sherlock = false
 else
@@ -100,10 +103,10 @@ dr_varcost = 10000 #for overriding variable cost to test things
 ####### END USER CONTROLS ##########
 
 # For SHERLOCK:
+# may need to occasionally run Pkg.update
 if Sherlock
-    Pkg.update()
+    # Pkg.update()
     # Pkg.add("JuMP")
-    # #Pkg.add("Clp")
     # Pkg.add("Gurobi")
     # Pkg.add("DataFrames")
     # Pkg.pin("DataFrames",v"0.11.7")
@@ -112,13 +115,12 @@ if Sherlock
 end
 
 using JuMP
-#using Clp
 using Gurobi
 using DataFrames
 using CSV
 using JLD2
 include("convert3dto2d.jl")
-include("make_scenarios.jl")
+include("make_scenarios_int.jl")
 
 test = Gurobi.Env() # test that gurobi is working
 
@@ -152,17 +154,26 @@ dem2 = CSV.read(string(default_data_fol, "demand_2015.csv"),datarow=1)
 dem = dem2[hours,2]
 
 
-# STOCHASTIC PARAMS #
+### STOCHASTIC PARAMS ###
+## DR Reliability ##
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(default_data_fol , "dist_input_",stochID,".csv"))
+probs = CSV.read(string(default_data_fol , "dist_input_",stochID,"dr.csv"))
 vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
 pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
 
-test = make_scenarios(n_periods,t_firsts,vdr_in, pro_in)
-vdr = test[1]
-pro = test[2]
+## Net Demand uncertainty ##
+ndprobs = CSV.read(string(default_data_fol , "dist_input_",stochID,"nd.csv"))
+ndv_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
+ndpro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
+
+## Combined Scenarios ##
+# make_scenarios_int(n_timesteps, dr_int_length, nd_int_length, dr_v, dr_p, nd_v, nd_p)
+all_scenarios = make_scenarios_int(n_periods,int_length, int_length,vdr_in, pro_in, ndv_in, ndpro_in)
+vdr = all_scenarios[1]
+vnd = all_scenarios[2]
+pro = all_scenarios[2]
 if sum(pro) != 1
     error("sum of probabilities is not one")
 end
@@ -172,6 +183,7 @@ n_omega = length(pro) #redefine for new number of scenarios
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
 
+### PARAMS ###
 genset = CSV.read(string(default_data_fol,"gen_merged_withIDs.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
