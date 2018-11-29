@@ -38,7 +38,7 @@
 ### handle command line args ###
 # cmd line format should be include("full_universe_stoch.jl") <timeseriesID> <stochID> <outputID>
 ######### USER CONTROLS ##########
-debug = false # stops execution before solving model
+debug = true # stops execution before solving model
 
 # Parse ARGS #
 defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing"]
@@ -155,7 +155,7 @@ n_omega = length(pro) #redefine for new number of scenarios
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
 
-genset = CSV.read(string(default_data_fol,"gen_merged_withIDs.csv"), missingstring ="NA")
+genset = CSV.read(string(default_data_fol,"gen_merged_withIDs_ramp.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -189,6 +189,8 @@ pmin = genset[:PMin]
 pmax = genset[:Capacity]
 startup = genset[:StartCost]
 varcost = genset[:VCost]
+rampmax = genset[:ramprate]
+
 # for manual override of DR variable cost
 if dr_override
     varcost[dr_ind] = dr_varcost
@@ -204,7 +206,6 @@ n_t = n_periods # number of timesteps
 ## generator availability ##
 pf = repeat([1.0], inner = [n_g, n_t])
 #pf = convert(Array{Float64},pf)
-
 
 # load wind, solar info
 solar_avail = CSV.read(string(default_data_fol,"solar_input_8760.txt"))
@@ -304,13 +305,15 @@ m = Model(solver=GurobiSolver(Presolve=0))
 # one workaround is p[g=GDR,t,o] being its own variable.
 # would need to change SUPPLY-DEMAND, GENMAX, and potentially startup/commitment too,
 # since these rely on the GENERATORS index...
-
 @constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
      p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])
 
 #STARTUP COSTS
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
     start_cost[g,t,o] >= v[g,t,o] * startup[g])
+#RAMP RATE -
+@constraint(m,[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
+    p[g,t,o] - p[g,t-1,o] <= rampmax[g])
 
 ### OBJECTIVE ###
 # @objective(m, Max, 5x + 3*y )
