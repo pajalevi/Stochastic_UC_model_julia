@@ -5,9 +5,17 @@
 # Demand response functions as a slow generator with an advance commmitment
 # not only of startup but also to a generation schedule
 # The only uncertainty modeled is that of the actual DR generation
+# The availability of DR can be restricted by the last four command line args
+
+# cmd line format should be:
+# include("full_universe_stoch.jl")
+#       <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>
+# last four are "0" if switch is not used
+
 # Written under Julia 0.6.4
 # Patricia Levi
 # pjlevi@stanford.edu
+# NOV 2018
 
 # TODO --------------------------------------
 # X change filepath for output writing
@@ -35,40 +43,63 @@
 # -------------------------------------------
 
 
-### handle command line args ###
-# cmd line format should be include("full_universe_stoch.jl") <timeseriesID> <stochID> <outputID>
-######### USER CONTROLS ##########
-debug = true # stops execution before solving model
+# -------------------------------------------
+# USER CONTROLS & CMD LINE ARGS ##########
+# -------------------------------------------
 
-# Parse ARGS #
-defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing"]
-localARGS = length(ARGS) > 0 ? ARGS : defaultARGS
+# USER PARAMS #
+debug = false # stops execution before solving model
+dr_override = true # set to true for below value to be used
+dr_varcost = 10000 #for overriding variable cost to test things
+
+sherlock_input_file = "inputs/"
+sherlock_output_file = "outputs/"
+laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/"
+laptop_input_file = "julia_input/"
+laptop_output_file = "julia_output/"
+
+slow_gens = ["HYDRO",
+            "COAL","NUCLEAR","DR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
+            "BIOMASS","GAS","GAS_CC",
+            "IMPORT_COAL","IMPORT_GAS"]
+            # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
+fast_gens = ["GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
+dr_gens = ["DR"]
+notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
+            "BIOMASS","GAS","GAS_CC",
+            "IMPORT_COAL","IMPORT_GAS",
+            "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
+
+# PARSE CMD LINE ARGS #
+defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing","0","0","0","0"]
+localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
 
-if nargs == 3
+if nargs == 7
     timeseriesID = localARGS[1]
     stochID = localARGS[2]
     outputID = localARGS[3]
-elseif nargs > 3
-    error("ERROR: Too many arguments supplied. Need <timeseriesID> <stochID> <outputID>")
+    availID = localARGS[4]
+    startlim = eval(parse(localARGS[5]))
+    hourlim = eval(parse(localARGS[6]))
+    energylim = eval(parse(localARGS[7]))
+elseif nargs > 7
+    error("ERROR: Too many arguments supplied. Need <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>")
 else
-    warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID>")
+    warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>")
 end
 n_periods = parse(Int64,split(timeseriesID,"h")[1]) # Must be the same as the first number in timeseriesID
 n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken in julia 1.0 #number of realizations
 @show timeseriesID
 @show stochID
 @show outputID
+@show availID
+@show startlim
+@show hourlim
+@show energylim
 @show n_omega
 @show n_periods
-
-sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-sherlock_input_file = "inputs/"
-sherlock_output_file = "outputs/"
-laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/"
-laptop_input_file = "julia_input/"
-laptop_output_file = "julia_output/"
 
 if split(pwd(),"/")[2] == "Users"
     Sherlock = false
@@ -76,12 +107,14 @@ else
     Sherlock = true # on sherlock? where are folders?
 end
 
-# OTHER PARAMS #
-dr_override = true # set to true for below value to be used
-dr_varcost = 10000 #for overriding variable cost to test things
-
 ####### END USER CONTROLS ##########
 
+
+# -------------------------------------------
+# SETUP
+# -------------------------------------------
+
+### Package management ###
 # For SHERLOCK:
 if Sherlock
     Pkg.update()
@@ -105,7 +138,7 @@ include("make_scenarios.jl")
 
 test = Gurobi.Env() # test that gurobi is working
 
-### FILE PATHS ###
+### SET FILE PATHS ###
 if Sherlock
     base_fol = sherlock_fol
     input_fol = string(sherlock_fol,sherlock_input_file)
@@ -118,10 +151,14 @@ end
 default_data_fol = string(input_fol,"default/")
 subsel_data_fol = string(input_fol,timeseriesID,"/")
 
-### READ IN DATA ###
+# -------------------------------------------
+### TIME PERIOD DATA
+# -------------------------------------------
 first_periods = CSV.read(string(subsel_data_fol,"first_periods_",timeseriesID,".csv"),datarow=1)[1]
 notfirst_periods = CSV.read(string(subsel_data_fol,"notfirst_periods_",timeseriesID,".csv"),datarow=1)[1]
 hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1)[1]
+n_days = convert(Int32,length(hours)/24)
+
 if length(hours)!=n_periods
     error("n_periods does not match the length of hours")
 end
@@ -134,8 +171,18 @@ dem2 = CSV.read(string(default_data_fol, "demand_2015.csv"),datarow=1)
 # subselect for just the rows corresponding to 'hours'
 dem = dem2[hours,2]
 
+# check that t_firsts fall on multiples of 24+1
+# ie that each period encompasses entire days
+# because this simplifies computation later on
+for i in 1:length(t_firsts)
+    if rem(t_firsts[i],24) != 1
+        error(string("period ",i," does not begin at the beginning of a day"))
+    end
+end
 
-# STOCHASTIC PARAMS #
+# -------------------------------------------
+# STOCHASTIC VARIABLE DATA
+# -------------------------------------------
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
 probs = CSV.read(string(default_data_fol , "dist_input_",stochID,".csv"))
@@ -155,6 +202,9 @@ n_omega = length(pro) #redefine for new number of scenarios
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
 
+# -------------------------------------------
+# GENERATOR DATA
+# -------------------------------------------
 genset = CSV.read(string(default_data_fol,"gen_merged_withIDs_ramp.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
@@ -169,16 +219,6 @@ genset = CSV.read(string(default_data_fol,"gen_merged_withIDs_ramp.csv"), missin
 # x = ["a","b","c"]
 # set_interest = ["c"]# for this to work must have the []
 # findin(x,set_interest)
-
-slow_gens = ["COAL","NUCLEAR","DR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_CC",
-            "IMPORT_COAL","IMPORT_GAS"]
-fast_gens = ["HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
-dr_gens = ["DR"]
-notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_CC",
-            "IMPORT_COAL","IMPORT_GAS",
-            "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
 
 dr_ind = findin(genset[:Fuel],dr_gens)
 slow_ind = findin(genset[:Fuel],slow_gens)
@@ -203,10 +243,10 @@ n_gf = length(fast_ind)
 n_gdr = length(dr_ind) #number of DR generators
 n_t = n_periods # number of timesteps
 
-## generator availability ##
+## GENERATOR AVAILABILITY ##
 pf = repeat([1.0], inner = [n_g, n_t])
-#pf = convert(Array{Float64},pf)
 
+### Wind and solar
 # load wind, solar info
 solar_avail = CSV.read(string(default_data_fol,"solar_input_8760.txt"))
 wind_avail = CSV.read(string(default_data_fol,"wind_input_8760.txt"))
@@ -227,7 +267,21 @@ for i in 1:length(names(wind_avail))
     pf[ind,:] = wind_avail[hours,i]
 end
 
+### Demand Response
+if eval(parse(availID))!=0
+    dr_avail = CSV.read(string(default_data_fol,availID,".csv"))
+    # sub in new info
+    for i in 1:length(names(dr_avail))
+        col = names(dr_avail)[i]
+        ind = findin(genset[:plantUnique],[convert(String, col)])
+        pf[ind,:] = dr_avail[hours,i]
+    end
+end
 
+
+# -------------------------------------------
+# MODEL SETUP
+# -------------------------------------------
 ### SETS ###
 TIME = 1:n_t
 SCENARIOS = 1:n_omega
@@ -239,10 +293,12 @@ GDR = dr_ind #DR generators
 # need an index for where the DR is in the slow generators
 GDR_SL_ind = findin(GSL,GDR)
 
+# -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
 m = Model(solver=GurobiSolver(Presolve=0))
 
+# -------------------------------------------
 ### VARIABLES ###
 # @variable(m, 0 <= x <= 2 )
 @variable(m, z[1:n_gsl,1:n_t]) # slow generator startup
@@ -261,6 +317,7 @@ m = Model(solver=GurobiSolver(Presolve=0))
 @variable(m, start_cost[1:n_g, 1:n_t, 1:n_omega] >= 0)
 
 
+# -------------------------------------------
 ### CONSTRAINTS ###
 # @constraint(m, 1x + 5y <= 3.0 )
 
@@ -315,6 +372,33 @@ m = Model(solver=GurobiSolver(Presolve=0))
 @constraint(m,[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
     p[g,t,o] - p[g,t-1,o] <= rampmax[g])
 
+#DR USAGE LIMITS
+# Require that each period starts at the beginning of a new day
+# to simplify computation
+
+#STARTLIM
+# number of startups per day
+if startlim !=0
+    @constraint(m,[g = 1:n_gdr,d = 1:n_days],
+        sum(z[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= startlim)
+end
+#uses z, the first stage startup var - corresponds to slow DR
+
+#HOURLIM
+#number of hours used per day
+if hourlim != 0
+    @constraint(m,[g = 1:n_gdr,d = 1:n_days],
+        sum(w[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= hourlim)
+end
+#uses w, the first stage startup var - corresponds to slow DR
+
+#ENERGYLIM
+# amount of energy used per day
+if energylim != 0
+    @constraint(m,[g = 1:n_gdr,d = 1:n_days ,o=SCENARIOS],
+        sum(p[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) <= energylim)
+end
+
 ### OBJECTIVE ###
 # @objective(m, Max, 5x + 3*y )
 @objective(m, Min, sum(pro[o] *
@@ -327,7 +411,9 @@ if debug
     error("just testing model so we are stopping here")
 end
 
-# Solve the model
+# -------------------------------------------
+# SOLVE MODEL
+# -------------------------------------------
 @printf("\nSolving:\n")
 status = solve(m)
 @printf("Status: %s\n", status)
@@ -335,6 +421,10 @@ status = solve(m)
 if !isdir(output_fol)
     mkdir(output_fol)
 end
+
+# -------------------------------------------
+# SAVE OUTPUT
+# -------------------------------------------
 
 # save workspace: m and certain inputs
 # vdr, pro, pf, varcost, various indices...
