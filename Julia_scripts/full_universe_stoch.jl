@@ -48,10 +48,12 @@
 # -------------------------------------------
 
 # USER PARAMS #
-debug = false # stops execution before solving model
+debug = true  # stops execution before solving model
+ramp_constraint = false #should ramping constraints be used?
 dr_override = true # set to true for below value to be used
 dr_varcost = 10000 #for overriding variable cost to test things
 
+sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
 sherlock_output_file = "outputs/"
 laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/"
@@ -106,7 +108,7 @@ if split(pwd(),"/")[2] == "Users"
 else
     Sherlock = true # on sherlock? where are folders?
 end
-
+@show Sherlock
 ####### END USER CONTROLS ##########
 
 
@@ -117,7 +119,7 @@ end
 ### Package management ###
 # For SHERLOCK:
 if Sherlock
-    Pkg.update()
+    # Pkg.update()
     # Pkg.add("JuMP")
     # #Pkg.add("Clp")
     # Pkg.add("Gurobi")
@@ -368,9 +370,12 @@ m = Model(solver=GurobiSolver(Presolve=0))
 #STARTUP COSTS
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
     start_cost[g,t,o] >= v[g,t,o] * startup[g])
+
 #RAMP RATE -
-@constraint(m,[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
-    p[g,t,o] - p[g,t-1,o] <= rampmax[g])
+if ramp_constraint
+    @constraint(m,[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
+        p[g,t,o] - p[g,t-1,o] <= (rampmax[g] * pmax[g]))
+end
 
 #DR USAGE LIMITS
 # Require that each period starts at the beginning of a new day
