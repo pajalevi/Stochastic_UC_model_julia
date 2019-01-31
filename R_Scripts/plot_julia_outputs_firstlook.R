@@ -15,7 +15,7 @@ input_fol = "Data/julia_input/"
 
 timeseriesID = "144h2groups"
 stochID = "n3_m1.0_0.2pp"
-outputID = "base_testing_small"
+outputID = "base_testing_full_noramp_1130"
 
 default_in_fol = paste0(base_fol,input_fol,"default/")
 instance_in_fol = paste0(base_fol,input_fol,timeseriesID,"/")
@@ -41,7 +41,7 @@ prod = rbind(slow_prod, fast_prod)
 ### plot demand and slow commitment ####
 # format data
 slcmt = slow_commit %>%
-  gather(key = "generator", value = "cmt", `BIOMASS-1`:`COAL-12`)
+  gather(key = "generator", value = "cmt", `BIOMASS-1`:`NUCLEAR-2`)
 slcmt = merge(slcmt,gen_data[,c("Capacity","PMin","plantUnique")], by.x = "generator", by.y = "plantUnique")
 slcmt$min_cmt = slcmt$cmt * slcmt$PMin
 slcmt$cap_cmt = slcmt$cmt * slcmt$Capacity
@@ -122,7 +122,7 @@ cbind(sort(unique(slcmt$generator)),sort(unique(slow_prod$GEN_IND)))
   abline(h=0)
   
   ggplot(prod_plot, aes(y = slow , x = 1:nrow(prod_plot))) + geom_line(color = "red") +
-    geom_line(aes(y=total, x = 1:nrow(prod_plot)), color = "black") + 
+    # geom_line(aes(y=total, x = 1:nrow(prod_plot)), color = "black") + 
     geom_line(aes(y=fast, x = 1:nrow(prod_plot)), color = "green") +
     geom_line(data = slcmt_plot, aes(y=capacity_committed + 900, x = 1:nrow(slcmt_plot)), color = "purple", linetype = 3) 
   
