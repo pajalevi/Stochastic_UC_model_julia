@@ -57,7 +57,7 @@ dr_varcost = 10000 #for overriding variable cost to test things
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
 sherlock_output_file = "outputs/"
-laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/"
+laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/"
 laptop_input_file = "julia_input/"
 laptop_output_file = "julia_output/"
 
@@ -74,20 +74,21 @@ notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
             "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
 
 # PARSE CMD LINE ARGS #
-defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing","0","0","0","0"]
+defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing","24","0","0","0","0"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
 
-if nargs == 7
+if nargs == 8
     timeseriesID = localARGS[1]
     stochID = localARGS[2]
     outputID = localARGS[3]
-    availID = localARGS[4]
-    startlim = eval(parse(localARGS[5]))
-    hourlim = eval(parse(localARGS[6]))
-    energylim = eval(parse(localARGS[7]))
-elseif nargs > 7
+    int_length = eval(parse(localARGS[4]))
+    availID = localARGS[5]
+    startlim = eval(parse(localARGS[6]))
+    hourlim = eval(parse(localARGS[7]))
+    energylim = eval(parse(localARGS[8]))
+elseif nargs > 8
     error("ERROR: Too many arguments supplied. Need <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>")
 else
     warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>")
@@ -97,6 +98,7 @@ n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken i
 @show timeseriesID
 @show stochID
 @show outputID
+@show int_length
 @show availID
 @show startlim
 @show hourlim
@@ -188,13 +190,19 @@ end
 # -------------------------------------------
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
-probs = CSV.read(string(default_data_fol , "dist_input_",stochID,".csv"))
-vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
-pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
+# probs = CSV.read(string(default_data_fol , "dist_input_",stochID,".csv"))
+# vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array
+# pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
 
-test = make_scenarios(n_periods,t_firsts,vdr_in, pro_in)
-vdr = test[1]
+## Net Demand uncertainty ##
+ndprobs = CSV.read(string(default_data_fol , "dist_input_",stochID,"_nd.csv"))
+ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
+ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
+
+
+test = make_scenarios(n_periods, ndv_in, ndpro_in, int_length)
+vdem = test[1]
 pro = test[2]
 if sum(pro) != 1
     error("sum of probabilities is not one")
@@ -204,6 +212,9 @@ n_omega = length(pro) #redefine for new number of scenarios
 # to check vdr and p are constructed properly
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
+
+# Set up demand realizations matrix dem_real[t,o] #
+dem_real = dem .* vdem
 
 # --------------------------------------------------------------------------------------
 # GENERATOR DATA
@@ -301,7 +312,7 @@ GDR_SL_ind = findin(GSL,GDR)
 # m = Model(solver = ClpSolver())
 m = Model(solver=GurobiSolver(Presolve=0))
 
-# -------------------------------------------
+# -----------------------------------------------------------------------------------------------------
 ### VARIABLES ###
 # @variable(m, 0 <= x <= 2 )
 @variable(m, z[1:n_gsl,1:n_t]) # slow generator startup
@@ -315,18 +326,23 @@ m = Model(solver=GurobiSolver(Presolve=0))
 
 #production variables
 @variable(m, p[1:n_g,1:n_t,1:n_omega] >= 0) #generator production
-@variable(m, p_dr[1:n_gdr, 1:n_t] >= 0) # DR day-ahead production commitment
+# @variable(m, p_dr[1:n_gdr, 1:n_t] >= 0) # DR day-ahead production commitment
 
+# track startup costs
 @variable(m, start_cost[1:n_g, 1:n_t, 1:n_omega] >= 0)
 
 
-# --------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
 ### CONSTRAINTS ###
 # @constraint(m, 1x + 5y <= 3.0 )
 
 #SUPPLY-DEMAND
 @constraint(m,supplydemand[t=1:n_t, o=1:n_omega],
-    sum( p[g,t,o] for g=1:n_g) == dem[t])
+    sum( p[g,t,o] for g=1:n_g) == dem_real[t,o])
+#DEMAND RAND
+# @constraint(m, dem_rand[t=TIME, o = SCENARIOS],
+#     dem_real[t,o] = dem[t] * vnd[t,o]) #THIS DOESNT NEED TO BE A CONSTRAINT?
+
 #GENMIN
 @constraint(m, [g= 1:n_g, t= 1:n_t, o=1:n_omega ],
     p[g,t,o] >= pmin[g] * u[g,t,o])
@@ -334,8 +350,9 @@ m = Model(solver=GurobiSolver(Presolve=0))
 @constraint(m,[g = GEN_NODR, t = 1:n_t, o=1:n_omega],
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
 #GENMAXDR
-@constraint(m,[g = 1:n_gdr, t = 1:n_t],
-    p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
+# @constraint(m,[g = 1:n_gdr, t = 1:n_t],
+#     p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
+
 #START_S
 # @constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
     # z[g,t+1] == w[g,t+1] - w[g,t])
@@ -365,8 +382,9 @@ m = Model(solver=GurobiSolver(Presolve=0))
 # one workaround is p[g=GDR,t,o] being its own variable.
 # would need to change SUPPLY-DEMAND, GENMAX, and potentially startup/commitment too,
 # since these rely on the GENERATORS index...
-@constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
-     p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])
+
+# @constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
+#      p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])
 
 #STARTUP COSTS
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
@@ -378,7 +396,7 @@ if ramp_constraint
         p[g,t,o] - p[g,t-1,o] <= (rampmax[g] * pmax[g]))
 end
 
-#DR USAGE LIMITS
+# ------ DR USAGE LIMITS
 # Require that each period starts at the beginning of a new day
 # to simplify computation
 
