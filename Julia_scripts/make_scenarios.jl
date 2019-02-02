@@ -1,7 +1,7 @@
 #make_scenarios.jl
 # inputs:
 # n of timesteps
-# position of beginning of new time periods (t_firsts)
+# position of beginning of new time periods (t_firsts) NOT USED
 # prob distribution of performance and outcomes, vdr, p (original)
 
 # outputs:
@@ -11,8 +11,16 @@
 # time periods independent.
 
 
-function make_scenarios(n_timesteps,t_firsts,vdr_og,p_og)
-    Tp = length(t_firsts)
+function make_scenarios(n_timesteps,t_firsts,v_og,p_og,int_length)
+    #=
+    number of timesteps in simulation
+    timesteps at beginning of a discrete timeperiod
+    value options
+    probabilities for each value
+    interval length
+    =#
+
+    Tp = floor(n_timesteps/int_length) #TODO update this with int_length
     n_omega = length(p_og)
     n_new_scenarios = n_omega^Tp
 
@@ -42,9 +50,9 @@ function make_scenarios(n_timesteps,t_firsts,vdr_og,p_og)
         if i == Tp
             last_period = n_timesteps
         else
-            last_period = t_firsts[i+1]-1
+            last_period = int_length*i #t_firsts[i+1]-1
         end
-        Tp_timesteps = t_firsts[i]:last_period
+        Tp_timesteps = (int_length*(i-1)):last_period
 
         # fill the given time period(row) with the appropriate repetition
         # of possible values in the same way as p is constructed, above
