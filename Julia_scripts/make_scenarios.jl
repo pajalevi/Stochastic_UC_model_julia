@@ -11,18 +11,18 @@
 # time periods independent.
 
 
-function make_scenarios(n_timesteps,t_firsts,v_og,p_og,int_length)
+function make_scenarios(n_timesteps,v_og,p_og,int_length)
     #=
     number of timesteps in simulation
-    timesteps at beginning of a discrete timeperiod
+    X timesteps at beginning of a discrete timeperiod
     value options
     probabilities for each value
     interval length
     =#
 
-    Tp = floor(n_timesteps/int_length) #TODO update this with int_length
+    Tp = convert(Int64,floor(n_timesteps/int_length)) #TODO update this with int_length
     n_omega = length(p_og)
-    n_new_scenarios = n_omega^Tp
+    n_new_scenarios = convert(Int64,n_omega^Tp)
 
     # create array of probabilities
     # - each row is a combination scenario
@@ -52,11 +52,11 @@ function make_scenarios(n_timesteps,t_firsts,v_og,p_og,int_length)
         else
             last_period = int_length*i #t_firsts[i+1]-1
         end
-        Tp_timesteps = (int_length*(i-1)):last_period
+        Tp_timesteps = (int_length*(i-1) + 1):last_period
 
         # fill the given time period(row) with the appropriate repetition
         # of possible values in the same way as p is constructed, above
-        vdr[Tp_timesteps,:] = repeat(vdr_og,inner = (length(Tp_timesteps),n_omega^(Tp-i)),outer = (1,n_omega^(i-1)))
+        vdr[Tp_timesteps,:] = repeat(v_og,inner = (length(Tp_timesteps),n_omega^(Tp-i)),outer = (1,n_omega^(i-1)))
     end
 
     return(vdr,p)

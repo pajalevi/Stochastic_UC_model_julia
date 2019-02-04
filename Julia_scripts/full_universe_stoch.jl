@@ -18,6 +18,7 @@
 # NOV 2018
 
 # TODO --------------------------------------
+# TRIPLECHECK UNITS - MW VS GW
 # X change filepath for output writing
 # X ----- change file structure in sherlock to match below
 # X ----- file structure: home folder(outputs(output ID), inputs(base, timeseriesID))
@@ -112,7 +113,7 @@ end
 ####### END USER CONTROLS ##########
 
 
-# -------------------------------------------
+# --------------------------------------------------------------------------------------
 # SETUP
 # -------------------------------------------
 
@@ -153,7 +154,7 @@ end
 default_data_fol = string(input_fol,"default/")
 subsel_data_fol = string(input_fol,timeseriesID,"/")
 
-# -------------------------------------------
+# --------------------------------------------------------------------------------------
 ### TIME PERIOD DATA
 # -------------------------------------------
 first_periods = CSV.read(string(subsel_data_fol,"first_periods_",timeseriesID,".csv"),datarow=1)[1]
@@ -182,7 +183,7 @@ for i in 1:length(t_firsts)
     end
 end
 
-# -------------------------------------------
+# --------------------------------------------------------------------------------------
 # STOCHASTIC VARIABLE DATA
 # -------------------------------------------
 # vdr = [0.9,1,1.1]
@@ -204,7 +205,7 @@ n_omega = length(pro) #redefine for new number of scenarios
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
 
-# -------------------------------------------
+# --------------------------------------------------------------------------------------
 # GENERATOR DATA
 # -------------------------------------------
 genset = CSV.read(string(default_data_fol,"gen_merged_withIDs_ramp.csv"), missingstring ="NA")
@@ -281,7 +282,7 @@ if eval(parse(availID))!=0
 end
 
 
-# -------------------------------------------
+# --------------------------------------------------------------------------------------
 # MODEL SETUP
 # -------------------------------------------
 ### SETS ###
@@ -319,7 +320,7 @@ m = Model(solver=GurobiSolver(Presolve=0))
 @variable(m, start_cost[1:n_g, 1:n_t, 1:n_omega] >= 0)
 
 
-# -------------------------------------------
+# --------------------------------------------------------------------------------------
 ### CONSTRAINTS ###
 # @constraint(m, 1x + 5y <= 3.0 )
 
@@ -427,7 +428,12 @@ if !isdir(output_fol)
     mkdir(output_fol)
 end
 
-# -------------------------------------------
+
+
+
+
+
+# --------------------------------------------------------------------------------------
 # SAVE OUTPUT
 # -------------------------------------------
 
