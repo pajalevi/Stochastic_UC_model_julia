@@ -1,4 +1,4 @@
-# write_input_day_subselection.R
+# write_inputs_subsel_julia_ercot.R
 # defines the function makeoutputs()
 # let user specify which days of year should be outputted
 # creates the following input files for julia:
@@ -9,37 +9,16 @@
 # wind_input_<ndays>.txt
 # demand_2015_<ndays>.txt
 
+# Feb 2019 adapted from write_input_day_subsel_julia.R
+# to have the filepaths needed for ERCOT
+
+
 # day input is given as day of year
 library(lubridate)
 library(tidyverse)
 input_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/unformatted data/"
 output_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/ercot_short/"
-
-##### randomly select 12 weeks out of the year ####
-# one in each month
-##output should be a set of firstdays
-
-demand = read.csv(file = paste0(input_folder,"demand_2015.csv"), header = F)
-demand$hour = as.numeric(substring(demand$V1,2,10))
-
-# ggplot(demand,aes(y=V2, x = hour)) + geom_line() + labs(y="demand (MWh)", title = "whole year demand")
-
-firstdays = c()
-days = c()
-ndays = 5
-for(i in 1:12){
-  daysInMonth = days_in_month(mdy(paste(i,"1 2015")))
-  # first day must be at least 7 days from end of month
-  monthday = sample(1:(daysInMonth-(ndays-1)), 1)
-  yearday = yday(mdy(paste(i,monthday,"2015", sep="/")))
-  
-  firstdays = c(firstdays, yearday)
-  days = c(days, yearday:(yearday+(ndays-1)))
-}
-firstdays
-days
-
-makeoutputs(days = days, firstdays = firstdays, input_folder = gams_fol,output_folder = output_fol)
+demand_file_name = "ercot_demand_data.csv"
 
 
 #### choose two 10 day intervals around the january and the summer peak
