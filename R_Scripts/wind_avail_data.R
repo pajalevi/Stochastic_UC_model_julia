@@ -1,6 +1,7 @@
 # match and organize wind availability data
 # output: each col is a unique wind plant
 #         with availability factor for each hour of the year 2016
+# follows setup_egrid_generators.R
 # Jan 2019
 
 

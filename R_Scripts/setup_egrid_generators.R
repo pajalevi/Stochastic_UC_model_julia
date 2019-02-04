@@ -232,8 +232,25 @@ for(i in techsel){
   }
 }
 
+#### create mapping from technologyAll to shortened reference name
+fuelref = array(dimnames = list(c(),sort(unique(alldat$technologyAll))),
+                dim=c(1,length(sort(unique(alldat$technologyAll)))),
+                data = c("OTHER","BATTERY",
+                         "HYDRO","COAL","LANDFILL_GAS",
+                         "GAS_CC","GAS_CT",
+                         "GAS_ICE","GAS_ST",
+                         "NUCLEAR","WIND",
+                         "GAS","BIOMASS", #Not sure about mapping of "Other Gases" to "Other" or "natgas"
+                         "OIL","OIL", # Not sure about mapping "Petroleum Coke" to "Petroleum"
+                         "SOLAR","BIOMASS"
+                ))
+alldat$Fuel = NA
+for(i in 1:nrow(alldat)){
+  alldat$Fuel = fuelref[,alldat$technologyAll]
+}
+
 #inspect
-# View(alldat[,c("Technology","PLFUELCT","technologyAll")])
+# View(alldat[,c("Technology","PLFUELCT","technologyAll","Fuel")])
 
 
 # for all plants that dont have a capacity from eia
@@ -471,11 +488,11 @@ for(i in 1:nrow(alldat)){
 #-----------------------#
 # Sum Fuel, O&M cost ####
 #-----------------------#
-alldat$cost_MWh = alldat$fuel_dollars_MWh + alldat$varOM
+alldat$VCost = alldat$fuel_dollars_MWh + alldat$varOM
 
-#-----------------------#
-# remove plants      ####
-#-----------------------#
+#--------------------------------#
+# remove some types of plants ####
+#--------------------------------#
 
 # remove plants with no fuel/MWh cost
 length(which(is.na(alldat$fuel_dollars_MWh)))
@@ -530,28 +547,36 @@ for(i in 1:length(types_missing)){
     
 }
 
+# inspect
+# ggplot(alldat_sub, aes(x=capacityAll, y=MinLoadMW)) + geom_point() + facet_wrap(~technologyAll)
+
+#------------------------------------#
+# fill in missing CO2 emissions   ####
+#------------------------------------#
+alldat_sub$PLC2ERTA[alldat_sub$Fuel == "BIOMASS"] = 0
+alldat_sub$PLC2ERTA[alldat_sub$Fuel == "LANDFILL_GAS"] = 0
+alldat_sub$PLC2ERTA[alldat_sub$Fuel == "SOLAR"] = 0
+alldat_sub$PLC2ERTA[alldat_sub$Fuel == "HYDRO"] = 0
+alldat_sub$PLC2ERTA[alldat_sub$Fuel == "WIND"] = 0
+
+missing_co2=is.na(alldat_sub$PLC2ERTA)
+types_missing = unique(alldat_sub$Fuel[missing_co2])
+for(i in 1:length(types_missing)){
+    gensel = str_detect(string = alldat_sub$Fuel, pattern = types_missing[i])
+  # if there is more than one other plant of this type with the data, we can take the average
+    if(sum(gensel & !missing_co2)){
+      avg_co2 = mean(alldat_sub$PLC2ERTA[gensel & !missing_co2])
+      alldat_sub$PLC2ERTA[gensel & missing_co2] = avg_co2
+    } else {
+      print(paste("generator type",types_missing[i],"has no examples with CO2 emissions"))
+    }
+
+}
+
 
 #-----------------------#
 # Create unique ID   ####
 #-----------------------#
-
-#### create mapping from technologyAll to shortened reference name
-fuelref = array(dimnames = list(c(),sort(unique(alldat_sub$technologyAll))),
-                dim=c(1,length(sort(unique(alldat_sub$technologyAll)))),
-                data = c("HYDRO",
-                         "COAL","LANDFILL_GAS",
-                         "GAS_CC","GAS_CT",
-                         "GAS_ICE","GAS_ST",
-                         "NUCLEAR","WIND",
-                         "GAS","BIOMASS", #Not sure about mapping of "Other Gases" to "Other" or "natgas"
-                         "OIL","OIL", # Not sure about mapping "Petroleum Coke" to "Petroleum"
-                         "SOLAR","BIOMASS"
-                ))
-alldat_sub$Fuel = NA
-for(i in 1:nrow(alldat_sub)){
-  alldat_sub$Fuel = fuelref[,alldat_sub$technologyAll]
-}
-
 
 ##### create a unique identifier for each plant #
 # because some plant types are subsets of other plant type names, must use FACTORS, not strings... ugh
@@ -582,42 +607,81 @@ sum(is.na(alldat_sub$ramprate))
 #-----------------------#
 # add startup cost   ####
 #-----------------------#
-alldat_sub$startCost = 0
+alldat_sub$StartCost = 0
 
 for(i in 1:nrow(startup_cost)){
   gensel = str_detect(alldat_sub$Fuel, pattern = startup_cost$technlogy[i])
   sizesel = (alldat_sub$capacityAll >= startup_cost$min_capacity[i] &
                alldat_sub$capacityAll < startup_cost$max_capacity[i])
   
-  alldat_sub$startCost[gensel & sizesel] = startup_cost$start_cost[i]
+  alldat_sub$StartCost[gensel & sizesel] = startup_cost$start_cost[i] * alldat_sub$capacityAll[gensel & sizesel]
 }
 
 #inspect
 # ggplot(alldat_sub, aes(x= capacityAll, y=startCost)) + geom_point() + facet_wrap(~Fuel)
 # there are no coal plants in the dataset <300 MW
 
+#-----------------------#
+# Convert units      ####
+#-----------------------#
+# taken from write_julia_generator_data.R
+# we want $/GW or $/GWh (convert from $/MW : *1000)
+# so far everything is in $/MW
+# WEIRD: why does merge_gen_dat_ramp.R / write_julia_generator_data.R 
+#         leave capacity in MW, but var cost and start cot in GW?
+
+# var cost
+
+# start cost
+
+# capacity?
+
+# rename some columns for model compatability
+names(alldat_sub)[names(alldat_sub) == 'MinLoadMW'] <- 'PMin'
+names(alldat_sub)[names(alldat_sub) == 'Capacity'] <- 'EIACapacity'
+names(alldat_sub)[names(alldat_sub) == 'capacityAll'] <- 'Capacity'
+
+#-----------------------#
+# Add a DR unit      ####
+#-----------------------#
+
+dr_row = as_tibble(matrix(nrow = 1, ncol = ncol(alldat_sub),
+                          dimnames = list(c(),names(alldat_sub))))
+
+dr_row$Fuel = "DR"
+dr_row$PNAME = "test DR"
+dr_row$Capacity = 1000
+dr_row$PMin = 0
+dr_row$StartCost = 0
+dr_row$VCost = 30
+dr_row$ramprate = 1
+dr_row$plantUnique = "DR-1"
+dr_row$PLC2ERTA = 0
+
+alldat_sub = rbind(alldat_sub, dr_row)
+
 #----------------------------#
-# Insepect your handiwork ####
+# Insepect                ####
 #----------------------------#
 desiredcols = c("BANAME","PNAME","PlantName.eGrid","PlantName.eia",
-               "PLPRMFL","PLFUELCT","Technology","technologyAll","Fuel","plantUnique",
-               "supercritical",
-               "PLHTRT",
-               "NAMEPCAP","Capacity","capacityAll",
-               "varOM","fuel_dollars_mmbtu",
-               "fuel_dollars_MWh","cost_MWh",
-               "MinLoadMW", "startCost",
-               "OperatingYr1.eGrid","OperatingYr2.eGrid","RetirementYr1.eGrid","RetirementYr2.eGrid",
-               "CAPFAC", # Plant capacity factor
-               "CHPFLAG", # Combined heat and power (CHP) plant adjustment flag
-               "PSFLAG", # Plant pumped storage flag
-               "PLNOXRTA", # Plant annual nox emission rate lb/MWh
-               "PLSO2RTA", # Plant annual so2 emission rate lb/MWh
-               "PLC2ERTA", # Plant annual CO2 equivalent total output emission rate (lb/MWh)
-               "PLGENAHY", # Plant annual hydro net generation (MWh)
-               "PLTRPR", # Plant total renewables generation percent (resource mix)
-               "LAT","LON"
-          )
+                "PLPRMFL","PLFUELCT","Technology","technologyAll","Fuel","plantUnique",
+                "supercritical",
+                "PLHTRT",
+                "NAMEPCAP","EIACapacity","Capacity",
+                "varOM","fuel_dollars_mmbtu",
+                "fuel_dollars_MWh","VCost",
+                "PMin", "StartCost",
+                "OperatingYr1.eGrid","OperatingYr2.eGrid","RetirementYr1.eGrid","RetirementYr2.eGrid",
+                "CAPFAC", # Plant capacity factor
+                "CHPFLAG", # Combined heat and power (CHP) plant adjustment flag
+                "PSFLAG", # Plant pumped storage flag
+                "PLNOXRTA", # Plant annual nox emission rate lb/MWh
+                "PLSO2RTA", # Plant annual so2 emission rate lb/MWh
+                "PLC2ERTA", # Plant annual CO2 equivalent total output emission rate (lb/MWh)
+                "PLGENAHY", # Plant annual hydro net generation (MWh)
+                "PLTRPR", # Plant total renewables generation percent (resource mix)
+                "LAT","LON"
+)
 # View(alldat_sub[,desiredcols])
 
 
