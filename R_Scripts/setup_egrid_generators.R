@@ -670,7 +670,7 @@ desiredcols = c("BANAME","PNAME","PlantName.eGrid","PlantName.eia",
                 "NAMEPCAP","EIACapacity","Capacity",
                 "varOM","fuel_dollars_mmbtu",
                 "fuel_dollars_MWh","VCost",
-                "PMin", "StartCost",
+                "PMin", "StartCost","ramprate",
                 "OperatingYr1.eGrid","OperatingYr2.eGrid","RetirementYr1.eGrid","RetirementYr2.eGrid",
                 "CAPFAC", # Plant capacity factor
                 "CHPFLAG", # Combined heat and power (CHP) plant adjustment flag

@@ -49,8 +49,9 @@
 # -------------------------------------------
 
 # USER PARAMS #
+no_vars = true #stops execution before making variables
 debug = true  # stops execution before solving model
-ramp_constraint = false #should ramping constraints be used?
+ramp_constraint = true #should ramping constraints be used?
 dr_override = true # set to true for below value to be used
 dr_varcost = 10000 #for overriding variable cost to test things
 
@@ -61,20 +62,32 @@ laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Projec
 laptop_input_file = "julia_input/"
 laptop_output_file = "julia_output/"
 
+## VIRGINIA DATASET
+# slow_gens = ["HYDRO",
+#             "COAL","NUCLEAR","DR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
+#             "BIOMASS","GAS","GAS_CC",
+#             "IMPORT_COAL","IMPORT_GAS"]
+#             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
+# fast_gens = ["GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
+# dr_gens = ["DR"]
+# notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
+#             "BIOMASS","GAS","GAS_CC",
+#             "IMPORT_COAL","IMPORT_GAS",
+#             "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
+
+## ERCOT DATASET
 slow_gens = ["HYDRO",
-            "COAL","NUCLEAR","DR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_CC",
-            "IMPORT_COAL","IMPORT_GAS"]
+            "COAL","NUCLEAR","DR","LANDFILL_GAS",
+            "BIOMASS","GAS","GAS_CC","GAS_ST"]
             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
-fast_gens = ["GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
+fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND"]
 dr_gens = ["DR"]
-notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_CC",
-            "IMPORT_COAL","IMPORT_GAS",
-            "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
+notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO",
+            "LANDFILL_GAS","NUCLEAR","OIL","SOLAR","WIND"    ]
+
 
 # PARSE CMD LINE ARGS #
-defaultARGS = ["144h2groups","n3_m1.0_0.2pp","base_testing","24","0","0","0","0"]
+defaultARGS = ["48h1groups","n3_m1.0_0.2pp","ercot_testing","24","dr_availability_daytime_2016","0","0","0"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
@@ -153,7 +166,7 @@ else
     input_fol = string(laptop_fol,laptop_input_file)
     output_fol = string(laptop_fol, laptop_output_file, outputID,"/")
 end
-default_data_fol = string(input_fol,"default/")
+default_data_fol = string(input_fol,"ercot_default/")
 subsel_data_fol = string(input_fol,timeseriesID,"/")
 
 # --------------------------------------------------------------------------------------
@@ -172,18 +185,19 @@ end
 t_firsts = findin(hours, first_periods)
 t_notfirst = findin(hours, notfirst_periods)
 
-dem2 = CSV.read(string(default_data_fol, "demand_2015.csv"),datarow=1)
+dem2 = CSV.read(string(default_data_fol, "ercot_demand_2016.csv"),datarow=2,missingstring="NA")
 # subselect for just the rows corresponding to 'hours'
 dem = dem2[hours,2]
 
 # check that t_firsts fall on multiples of 24+1
 # ie that each period encompasses entire days
 # because this simplifies computation later on
-for i in 1:length(t_firsts)
-    if rem(t_firsts[i],24) != 1
-        error(string("period ",i," does not begin at the beginning of a day"))
-    end
-end
+# for i in 1:length(t_firsts)
+#     if rem(t_firsts[i],24) != 1
+#         error(string("period ",i," does not begin at the beginning of a day"))
+#     end
+# end
+# this gets messed up by daylight savings time
 
 # --------------------------------------------------------------------------------------
 # STOCHASTIC VARIABLE DATA
@@ -219,7 +233,7 @@ dem_real = dem .* vdem
 # --------------------------------------------------------------------------------------
 # GENERATOR DATA
 # -------------------------------------------
-genset = CSV.read(string(default_data_fol,"gen_merged_withIDs_ramp.csv"), missingstring ="NA")
+genset = CSV.read(string(default_data_fol,"complete_generator_listing_ERCOT_012019.csv"), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -262,11 +276,11 @@ pf = repeat([1.0], inner = [n_g, n_t])
 
 ### Wind and solar
 # load wind, solar info
-solar_avail = CSV.read(string(default_data_fol,"solar_input_8760.txt"))
-wind_avail = CSV.read(string(default_data_fol,"wind_input_8760.txt"))
-# remove first col of each
-solar_avail = solar_avail[:,2:ncol(solar_avail)]
-wind_avail = wind_avail[:,2:ncol(wind_avail)]
+solar_avail = CSV.read(string(default_data_fol,"solar_availability_factors_2016.csv"))
+wind_avail = CSV.read(string(default_data_fol,"wind_availability_factors_2016.csv"))
+# remove last col of each
+solar_avail = solar_avail[:,1:(ncol(solar_avail)-1)]
+wind_avail = wind_avail[:,1:(ncol(wind_avail)-1)]
 # loop through all colnames, use findin(genset[:plantUnique],XX) to get row
 # sub in new info
 for i in 1:length(names(solar_avail))
@@ -282,8 +296,10 @@ for i in 1:length(names(wind_avail))
 end
 
 ### Demand Response
-if eval(parse(availID))!=0
+if parse(availID)!=0
     dr_avail = CSV.read(string(default_data_fol,availID,".csv"))
+    # remove first col
+    dr_avail = dr_avail[:,2:ncol(dr_avail)]
     # sub in new info
     for i in 1:length(names(dr_avail))
         col = names(dr_avail)[i]
@@ -311,6 +327,10 @@ GDR_SL_ind = findin(GSL,GDR)
 ### MODEL ###
 # m = Model(solver = ClpSolver())
 m = Model(solver=GurobiSolver(Presolve=0))
+
+if no_vars
+    error("just testing model so we are stopping here")
+end
 
 # -----------------------------------------------------------------------------------------------------
 ### VARIABLES ###

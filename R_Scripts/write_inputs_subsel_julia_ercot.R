@@ -75,7 +75,8 @@ dem = read_csv(paste0(unformatted_input_fol, demand_file_name))
 daysel = yday(dem$time_UTC[9786]):(yday(dem$time_UTC[9786])+1) #yday is 1-indexed
 firstday = daysel[1]
 
-makeoutputs(days = daysel, firstdays = firstday, id = "ercot_2day_test",
+makeoutputs(days = daysel, firstdays = firstday, 
+            # id = "ercot_2day_test",
             input_folder = unformatted_input_fol,
             output_folder = output_fol,
             dr_name = dr_input_name,
