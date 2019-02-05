@@ -22,14 +22,14 @@ solar_index = data_frame(index = 1:nrow(solar_metadata),
                          lon = as.numeric(solar_metadata[,"lon"]),
                          filename = solar_dat_files)
 
-# set up holder for output, and useful indices
+# set up holder for output, and useful indices ####
 solarsel = (gendat$Fuel =="SOLAR")
 solardf = data.frame(names = gendat$plantUnique[solarsel],
                      solarind = which(solarsel)) #bookkeeping
 solar_avail = as.tibble(matrix(nrow = 8760+24, ncol = nrow(solardf), 
                      dimnames = list(c(),solardf$names))) #final output
 
-# identify nearest solar_index measurement site
+# identify nearest solar_index measurement site ####
 solardf$solarsiteID = NA
 for(i in 1:nrow(solardf)){
   distances = distHaversine(p1 = c(gendat$LON[solardf$solarind[i]],gendat$LAT[solardf$solarind[i]]), p2 = solar_index[,c("lon","lat")])
@@ -38,28 +38,31 @@ for(i in 1:nrow(solardf)){
   solardf$solarsiteID[i] =  newid
 }
 
-# Load the datasets that are wanted
+# Load the datasets that are wanted ####
 solar_load = unique(solardf$solarsiteID)
 availdata = as_data_frame(matrix(NA, nrow = 8760+24, ncol = length(solar_load),
                               dimnames = list(c(),paste0("file",solar_load))))
 for(f in solar_load){
   index_row = which(f==solar_index$index)
-  temp = read_csv(file = paste0(solardatfol,solar_index$filename[index_row]), skip=2)
-  maxprod = max(temp$kW)
-  temp$avail = temp$kW/maxprod
+  solar_input = read_csv(file = paste0(solardatfol,solar_index$filename[index_row]), skip=2)
+  maxprod = max(solar_input$kW)
+  solar_input$avail = solar_input$kW/maxprod
   
   #NEED TO ADJUST UTC-> CST! I will work in CST (6 hours behind UTC)
   # can find first row that is in 2016, and fill the remaining hours at the end of 2016 with 0... since its night
   # this should be fine...
   # what time zone is wind or demand given in?
-  availdata[,paste0("file",f)] = c(temp$avail[7:nrow(temp)],rep(0,6))
+  availdata[,paste0("file",f)] = c(solar_input$avail[7:nrow(solar_input)],rep(0,6))
 }
-solar_avail$time_UTC = as_datetime(rep(0,8784))
-solar_avail$time_UTC[1:(nrow(temp)-6)] = temp$UTC[7:nrow(temp)]
-solar_avail$time_UTC[(nrow(temp)-5):nrow(temp)] = temp$UTC[nrow(temp)]+hours(1:6)
+
+# DEAL WITH THIS - I shifted both 'availdata' and time, so this is UTC. I also need to make a CST col that is UTC-6
+# solar_avail$time_UTC = as_datetime(rep(0,8784)) # IS THIS CST OR UTC?
+# solar_avail$time_UTC[1:(nrow(solar_input)-6)] = solar_input$UTC[7:nrow(solar_input)]
+# solar_avail$time_UTC[(nrow(solar_input)-5):nrow(solar_input)] = solar_input$UTC[nrow(solar_input)]+hours(1:6)
+solar_avail$time_CST = solar_input$UTC
 
 
-# fill in solar_avail
+# fill in solar_avail with loaded data ####
 for(c in 1:nrow(solardf)){
   # ID correct dataset for current col
   avail_file = solardf$solarsiteID[solardf$names == dimnames(solar_avail)[[2]][c]]

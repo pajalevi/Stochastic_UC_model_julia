@@ -40,7 +40,7 @@ sort((gendat$PNAME[windsel])[!matches]) #unmatched wind
 
 matchlist = rep(NA,nrow(windkey))
 matchlist[matching[matches]] = (gendat$PNAME[windsel])[matches]
-View(cbind(windkey$`ERCOT Unit Name(s)`,matchlist))
+# View(cbind(windkey$`ERCOT Unit Name(s)`,matchlist))
 
 ## identify site ID for each wind plant ##
 gendat$windsiteID = NA
@@ -82,7 +82,7 @@ intermediate = windgen16 %>%
          month = as.integer(substr(YYYYMMDD,5,6)),
          day = as.integer(substr(YYYYMMDD,7,8)),
          hour = as.integer(substr(HHMM_CST,1,2)),
-        datetime = make_datetime(year = 2016, month, day, hour)) %>%
+         time_CST = make_datetime(year = 2016, month, day, hour)) %>%
   filter(sitenumber %in% unique(sitesdesired)) 
 
 newwind = intermediate%>%
@@ -100,6 +100,12 @@ for(i in 1:length(windsel)){
   windavailfactors16[,i] = newwind[,col]
 }
 
+#-----------------#
+# add dttm col ####
+#-----------------#
+windavailfactors16$time_CST = newwind$time_CST
+
+
 #---------#
 # check ####
 #---------#
@@ -107,7 +113,7 @@ for(i in 1:length(windsel)){
 head(windavailfactors16$`WIND-1`)
 head(newwind$`2112`)
 
-gendat[windsel[1],c("PNAME","plantUnique","windsiteID")]
+gendat[windsel,c("PNAME","plantUnique","windsiteID")]
 # # A tibble: 1 x 3
 # PNAME                          plantUnique windsiteID
 # <chr>                          <chr>            <dbl>
