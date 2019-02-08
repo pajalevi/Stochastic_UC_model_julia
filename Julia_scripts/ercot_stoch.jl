@@ -49,8 +49,8 @@
 # -------------------------------------------
 
 # USER PARAMS #
-no_vars = true #stops execution before making variables
-debug = true  # stops execution before solving model
+no_vars = false #stops execution before making variables
+debug = false  # stops execution before solving model
 ramp_constraint = true #should ramping constraints be used?
 dr_override = true # set to true for below value to be used
 dr_varcost = 10000 #for overriding variable cost to test things
@@ -366,8 +366,8 @@ end
 #GENMIN
 @constraint(m, [g= 1:n_g, t= 1:n_t, o=1:n_omega ],
     p[g,t,o] >= pmin[g] * u[g,t,o])
-#GENMAX
-@constraint(m,[g = GEN_NODR, t = 1:n_t, o=1:n_omega],
+#GENMAX - only for GEN_NODR if dr is random
+@constraint(m,[g = 1:n_g, t = 1:n_t, o=1:n_omega],
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
 #GENMAXDR
 # @constraint(m,[g = 1:n_gdr, t = 1:n_t],
@@ -478,15 +478,15 @@ end
 # save workspace: m and certain inputs
 # vdr, pro, pf, varcost, various indices...
 try
-    @save string(output_fol,"workspace.jld2") m vdr pro
+    @save string(output_fol,"workspace.jld2") m vdr pro p
 end
 
 # check production
 # print("schedule of DR")
-x = getvalue(p_dr)
-x_df = DataFrame(transpose(x))
-names!(x_df,[Symbol("$input") for input in genset[dr_ind,:plantUnique]])
-CSV.write(string(output_fol,"DR_schedule.csv"), x_df)
+# x = getvalue(p)
+# x_df = DataFrame(transpose(x))
+# names!(x_df,[Symbol("$input") for input in genset[:plantUnique]])
+# CSV.write(string(output_fol,"production_schedule.csv"), x_df)
 
 # display(x)
 # print("production of DR:")
