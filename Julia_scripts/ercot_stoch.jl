@@ -54,6 +54,8 @@ debug = false  # stops execution before solving model
 ramp_constraint = true #should ramping constraints be used?
 dr_override = true # set to true for below value to be used
 dr_varcost = 10000 #for overriding variable cost to test things
+randScenarioSel = true
+nrandp = 200
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
@@ -87,12 +89,13 @@ notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO
 
 
 # PARSE CMD LINE ARGS #
-defaultARGS = ["48h1groups","n3_m1.0_0.2pp","ercot_testing","24","dr_availability_daytime_2016","0","0","0"]
+ARGNAMES = [ "<timeseriesID>" "<stochID>" "<outputID>" "<intlength>" "<availID>" "<startlim>" "<hourlim>" "<energylim>" "<nrandp>"]
+defaultARGS = ["48h1groups","n3_m1.0_0.2pp","ercot_testing","24","dr_availability_daytime_2016","0","0","0","200"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
 
-if nargs == 8
+if nargs == 9
     timeseriesID = localARGS[1]
     stochID = localARGS[2]
     outputID = localARGS[3]
@@ -101,10 +104,11 @@ if nargs == 8
     startlim = eval(parse(localARGS[6]))
     hourlim = eval(parse(localARGS[7]))
     energylim = eval(parse(localARGS[8]))
-elseif nargs > 8
-    error("ERROR: Too many arguments supplied. Need <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>")
-else
-    warn("not enough arguments supplied. Need <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>")
+    nrandp = eval(parse(localARGS[9]))
+elseif nargs > 9
+    error(string("Too many arguments supplied. Need ",join(ARGNAMES[1,:]," ")))
+els
+    warn("not enough arguments supplied. Need ", join(ARGNAMES[1,:]," "))
 end
 n_periods = parse(Int64,split(timeseriesID,"h")[1]) # Must be the same as the first number in timeseriesID
 n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken in julia 1.0 #number of realizations
@@ -118,7 +122,7 @@ n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken i
 @show energylim
 @show n_omega
 @show n_periods
-
+@show nrandp
 if split(pwd(),"/")[2] == "Users"
     Sherlock = false
 else
@@ -160,11 +164,11 @@ test = Gurobi.Env() # test that gurobi is working
 if Sherlock
     base_fol = sherlock_fol
     input_fol = string(sherlock_fol,sherlock_input_file)
-    output_fol = string(sherlock_fol, sherlock_output_file, outputID,"/")
+    output_fol = string(sherlock_fol, sherlock_output_file, outputID,"_",Dates.format(Dates.now(),"Ymd_HHMMSS"),"/")
 else
     base_fol = laptop_fol
     input_fol = string(laptop_fol,laptop_input_file)
-    output_fol = string(laptop_fol, laptop_output_file, outputID,"/")
+    output_fol = string(laptop_fol, laptop_output_file, outputID,"_",Dates.format(Dates.now(),"Ymd_HHMMSS"),"/")
 end
 default_data_fol = string(input_fol,"ercot_default/")
 subsel_data_fol = string(input_fol,timeseriesID,"/")
@@ -215,7 +219,7 @@ ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Arr
 ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
 
 
-test = make_scenarios(n_periods, ndv_in, ndpro_in, int_length)
+test = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
 vdem = test[1]
 pro = test[2]
 if sum(pro) != 1
@@ -424,7 +428,7 @@ end
 # number of startups per day
 if startlim !=0
     @constraint(m,[g = 1:n_gdr,d = 1:n_days],
-        sum(z[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= startlim)
+        sum(v[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= startlim)
 end
 #uses z, the first stage startup var - corresponds to slow DR
 
@@ -432,7 +436,7 @@ end
 #number of hours used per day
 if hourlim != 0
     @constraint(m,[g = 1:n_gdr,d = 1:n_days],
-        sum(w[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= hourlim)
+        sum(u[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= hourlim)
 end
 #uses w, the first stage startup var - corresponds to slow DR
 
@@ -466,9 +470,10 @@ if !isdir(output_fol)
     mkdir(output_fol)
 end
 
-
-
-
+## save a copy of inputs to the output file
+inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))
+inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
+CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
 
 
 # --------------------------------------------------------------------------------------

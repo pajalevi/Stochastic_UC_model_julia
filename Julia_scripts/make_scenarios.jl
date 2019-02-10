@@ -10,14 +10,16 @@
 # this is to make the performance of DR in different
 # time periods independent.
 
-
-function make_scenarios(n_timesteps,v_og,p_og,int_length)
+using StatsBase
+function make_scenarios(n_timesteps,v_og,p_og,int_length; randsel = true, nrand = 200)
     #=
     number of timesteps in simulation
     X timesteps at beginning of a discrete timeperiod
     value options
     probabilities for each value
     interval length
+    TF should we pick a subselection of the scenarios
+    how many scenarios if so
     =#
 
     Tp = convert(Int64,floor(n_timesteps/int_length)) #TODO update this with int_length
@@ -28,6 +30,7 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length)
     # - each row is a combination scenario
     # - each column is a time period
     # - data is the probability of the base scenario
+
 
     prob_array = Array{Rational}(n_new_scenarios,Tp) #rational type avoids rounding error
     #iterate through columns
@@ -57,6 +60,13 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length)
         # fill the given time period(row) with the appropriate repetition
         # of possible values in the same way as p is constructed, above
         vdr[Tp_timesteps,:] = repeat(v_og,inner = (length(Tp_timesteps),n_omega^(Tp-i)),outer = (1,n_omega^(i-1)))
+    end
+
+    if randsel & (nrand < n_new_scenarios)
+        scenarios = sample(1:n_new_scenarios,nrand,replace=false)
+        vdr = vdr[:,scenarios]
+        ptemp = p[scenarios]
+        p = ptemp/sum(ptemp) #adjust probabilities so they sum to 1
     end
 
     return(vdr,p)
