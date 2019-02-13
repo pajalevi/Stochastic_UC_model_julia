@@ -4,7 +4,18 @@
 # writes sbatch script for them and submits
 # Patricia Levi Feb 2019
 
-function submit_multi(nperiods, runID, drID, stochID, genID)
+# Currently, the 'run' commands dont seem to work very well
+# a few options:
+# 1) look into soln at bottom of https://discourse.julialang.org/t/using-as-a-wildcard-in-backtick-commands/6094/4
+# 2) write a shell script that creates PERIODS and calls the SBATCH script (created statically)
+# 3) make the SBATCH script statically and create PERIODS by hand
+# NB that the script which creates PERIODS must be at the same or higher hierarchical
+#   level as the sbatch script - cannot call a script which creates PERIODS and then
+#   call sbatch - script would have to create periods and call sbatch
+#   and if sbatch is dynamically named then the shell script has to be dynamically written
+# currently 2 and 3 look the most likely -- will have to test this in real time
+
+function submit_multi(nperiods, paramsID, drID, stochID, genID, multiTF)
     # WRITE SBATCH SCRIPT
     # saved in julia_ver/code
     open("$runID.sbatch","w") do f
@@ -19,18 +30,18 @@ function submit_multi(nperiods, runID, drID, stochID, genID)
                 #SBATCH --mail_user=pjlevi@stanford.edu
 
                 cd ~/dr_stoch_uc/julia_ver/code
-
                 module load julia 0.6.4
                 module load gurobi \n
-                PERIODNAME = \${PERIODS[\$SLURM_ARRAY_TASK_ID]}""")
-        write(f,"julia ercot_stoch.jl \$PERIODNAME $runID $drID $stochID $genID")
+                PERIODNAME = \${PERIODS[\$SLURM_ARRAY_TASK_ID]}
+                DATE=`date '+%Y-%m-%d_%H-%M-%S'` \n""")
+        write(f,"julia ercot_stoch.jl \$DATE $paramsID $multiTF \$PERIODNAME")
     end
 
     #export (in shell) an array of period names for sbatch
     #taken to be the names of period_*.csv file in input folder
     #assume input folder has runID name
     cdcmd = `cd ~/dr_stoch_uc/julia_ver/inputs/$runID`
-    periodscmd = `export PERIODS = (ls -1 period\*.csv)` #THIS IS WRONG. how to use *?
+    periodscmd = `export PERIODS = (\$(ls -1 period\*.csv))` #THIS IS WRONG. how to use *?
     cdbackcmd = `cd ~/dr_stoch_uc/julia_ver/code`
     run(cdcmd)
     run(periodscmd)

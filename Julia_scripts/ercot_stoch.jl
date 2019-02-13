@@ -8,8 +8,8 @@
 # The availability of DR can be restricted by the last four command line args
 
 # cmd line format should be:
-# include("full_universe_stoch.jl")
-#       <timeseriesID> <stochID> <outputID> <availID> <startlim> <hourlim> <energylim>
+# include("full_universe_stoch.jl") <date> <inputs_file_name> <multi-runTF> <period_name>
+#
 # last four are "0" if switch is not used
 
 # Written under Julia 0.6.4
@@ -42,6 +42,18 @@
 # save workspace to output folder using JLD2
 # save probabilities and characteristics of new scenarios in output folder
 # -------------------------------------------
+### Packages ###
+using JuMP
+#using Clp
+using Gurobi
+using DataFrames
+using CSV
+using JLD2
+include("convert3dto2d.jl")
+include("make_scenarios.jl")
+include("writecsvmulti.jl")
+
+test = Gurobi.Env() # test that gurobi is working
 
 
 # -------------------------------------------
@@ -50,19 +62,16 @@
 
 # USER PARAMS #
 no_vars = false #stops execution before making variables
-debug = false  # stops execution before solving model
-ramp_constraint = true #should ramping constraints be used?
-dr_override = true # set to true for below value to be used
-dr_varcost = 10000 #for overriding variable cost to test things
-randScenarioSel = true
-nrandp = 200
+debug = true  # stops execution before solving model
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
 sherlock_output_file = "outputs/"
-laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/"
-laptop_input_file = "julia_input/"
-laptop_output_file = "julia_output/"
+sherlock_params_fol = "code/"
+laptop_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
+laptop_input_file = "Data/julia_input/"
+laptop_output_file = "Data/julia_output/"
+laptop_params_fol = "Julia_UC_Github/Julia_scripts/"
 
 ## VIRGINIA DATASET
 # slow_gens = ["HYDRO",
@@ -87,109 +96,106 @@ dr_gens = ["DR"]
 notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO",
             "LANDFILL_GAS","NUCLEAR","OIL","SOLAR","WIND"    ]
 
+####### END USER CONTROLS ##########
 
-# PARSE CMD LINE ARGS #
-ARGNAMES = [ "<timeseriesID>" "<stochID>" "<outputID>" "<intlength>" "<availID>" "<startlim>" "<hourlim>" "<energylim>" "<nrandp>"]
-defaultARGS = ["48h1groups","n3_m1.0_0.2pp","ercot_testing","24","dr_availability_daytime_2016","0","0","0","200"]
-localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
-nargs = length(localARGS)
-@show localARGS
-
-if nargs == 9
-    timeseriesID = localARGS[1]
-    stochID = localARGS[2]
-    outputID = localARGS[3]
-    int_length = eval(parse(localARGS[4]))
-    availID = localARGS[5]
-    startlim = eval(parse(localARGS[6]))
-    hourlim = eval(parse(localARGS[7]))
-    energylim = eval(parse(localARGS[8]))
-    nrandp = eval(parse(localARGS[9]))
-elseif nargs > 9
-    error(string("Too many arguments supplied. Need ",join(ARGNAMES[1,:]," ")))
-els
-    warn("not enough arguments supplied. Need ", join(ARGNAMES[1,:]," "))
-end
-n_periods = parse(Int64,split(timeseriesID,"h")[1]) # Must be the same as the first number in timeseriesID
-n_omega=parse(Int64,split(stochID,r"n|_";keep=false)[1]) #TODO: keep is broken in julia 1.0 #number of realizations
-@show timeseriesID
-@show stochID
-@show outputID
-@show int_length
-@show availID
-@show startlim
-@show hourlim
-@show energylim
-@show n_omega
-@show n_periods
-@show nrandp
+# --------------------------------------------------------------------------------------
+# FILEPATH SETUP
+# -------------------------------------------
 if split(pwd(),"/")[2] == "Users"
     Sherlock = false
 else
     Sherlock = true # on sherlock? where are folders?
 end
 @show Sherlock
-####### END USER CONTROLS ##########
 
-
-# --------------------------------------------------------------------------------------
-# SETUP
-# -------------------------------------------
-
-### Package management ###
-# For SHERLOCK:
-if Sherlock
-    # Pkg.update()
-    # Pkg.add("JuMP")
-    # #Pkg.add("Clp")
-    # Pkg.add("Gurobi")
-    # Pkg.add("DataFrames")
-    # Pkg.pin("DataFrames",v"0.11.7")
-    # Pkg.add("CSV")
-    # Pkg.add("JLD2")
-end
-
-using JuMP
-#using Clp
-using Gurobi
-using DataFrames
-using CSV
-using JLD2
-include("convert3dto2d.jl")
-include("make_scenarios.jl")
-
-test = Gurobi.Env() # test that gurobi is working
-
-### SET FILE PATHS ###
 if Sherlock
     base_fol = sherlock_fol
     input_fol = string(sherlock_fol,sherlock_input_file)
-    output_fol = string(sherlock_fol, sherlock_output_file, outputID,"_",Dates.format(Dates.now(),"Ymd_HHMMSS"),"/")
+    params_fol = string(sherlock_fol, sherlock_params_fol)
 else
     base_fol = laptop_fol
     input_fol = string(laptop_fol,laptop_input_file)
-    output_fol = string(laptop_fol, laptop_output_file, outputID,"_",Dates.format(Dates.now(),"Ymd_HHMMSS"),"/")
+    params_fol = string(laptop_fol, laptop_params_fol)
 end
 default_data_fol = string(input_fol,"ercot_default/")
-subsel_data_fol = string(input_fol,timeseriesID,"/")
+
+
+# PARSE CMD LINE ARGS #
+ARGNAMES = ["<date>" ,"<inputs_file_name>", "<multi-runTF>", "<period_name>" ]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d_HH-MM-SS"),"inputs_ercot.csv","true","periods_1_1_48.csv"]
+localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
+nargs = length(localARGS)
+@show localARGS
+
+if nargs == 4
+    submitdate = localARGS[1]
+    input_file_name = localARGS[2]
+    multiTF = parse(Bool,lowercase(localARGS[3]))
+    periodID = localARGS[4]
+elseif nargs ==2
+    submitdate = localARGS[1]
+    input_file_name = localARGS[2]
+    multiTF = parse(Bool,lowercase(localARGS[3]))
+    if !multiTF
+        error("If doing a multi-period run, need period ID")
+    end
+elseif nargs > 3
+    error(string("Too many arguments supplied. Need ",join(ARGNAMES[1,:]," ")))
+elseif nargs <2
+    warn("not enough arguments supplied. Need ", join(ARGNAMES[1,:]," "))
+end
+
+inputs = CSV.read(string(params_fol,input_file_name))
+@show inputs
+inputs[:,:rowkey] = 1
+inputs = unstack(inputs,:rowkey, Symbol("Input name"), :Value)
+
+# parse out non-string inputs
+startlim = parse(Float64,inputs[1,:startlim])
+hourlim = parse(Float64,inputs[1,:hourlim])
+energylim = parse(Float64,inputs[1,:energylim])
+dr_override = parse(Bool,lowercase(inputs[1,:dr_override]))
+dr_varcost = parse(Float64,inputs[1,:dr_varcost])
+randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
+trueBinaryStartup = parse(Bool,lowercase(inputs[1,:trueBinaryStartup]))
+DRtype = parse(Int64,inputs[1,:DRtype])
+nrandp = parse(Int64,inputs[1,:nrandp])
+int_length = parse(Int64,inputs[1,:intlength])
+
+if Sherlock
+    output_fol = string(sherlock_fol, sherlock_output_file, inputs[1,:outputID],"_",submitdate,"/")
+else
+    output_fol = string(laptop_fol, laptop_output_file, inputs[1,:outputID],"_",submitdate,"/")
+end
+subsel_data_fol = string(input_fol,inputs[1,:timeseriesID],"/")
+
+# setup unique ID for period identification in output
+if multiTF
+    pbits = split(periodID,r"_|\.|-")
+    periodnum = pbits[2]
+    periodfirst = pbits[3]
+    periodlast = pbits[4]
+    periodsave = string("p",periodnum,"_",periodfirst,"-",periodlast)
+end
 
 # --------------------------------------------------------------------------------------
 ### TIME PERIOD DATA
 # -------------------------------------------
-first_periods = CSV.read(string(subsel_data_fol,"first_periods_",timeseriesID,".csv"),datarow=1)[1]
-notfirst_periods = CSV.read(string(subsel_data_fol,"notfirst_periods_",timeseriesID,".csv"),datarow=1)[1]
-hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1)[1]
-n_days = convert(Int32,length(hours)/24)
-
-if length(hours)!=n_periods
-    error("n_periods does not match the length of hours")
+# first_periods = CSV.read(string(subsel_data_fol,"first_periods_",inputs[1,:timeseriesID],".csv"),datarow=1)[1]
+# notfirst_periods = CSV.read(string(subsel_data_fol,"notfirst_periods_",inputs[1,:timeseriesID],".csv"),datarow=1)[1]
+if multiTF
+    hours = CSV.read(string(subsel_data_fol,periodID),datarow=1)[1]
+else
+    hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1)[1]
 end
+n_days = convert(Int32,length(hours)/24)
+n_periods = length(hours)
 
 # convert first and notfirst periods to indices
-t_firsts = findin(hours, first_periods)
-t_notfirst = findin(hours, notfirst_periods)
+t_firsts = 1
+t_notfirst = collect(2:length(hours))
 
-dem2 = CSV.read(string(default_data_fol, "ercot_demand_2016.csv"),datarow=2,missingstring="NA")
+dem2 = CSV.read(string(default_data_fol, inputs[1,:demandFile]),datarow=2,missingstring="NA")
 # subselect for just the rows corresponding to 'hours'
 dem = dem2[hours,2]
 
@@ -214,7 +220,7 @@ dem = dem2[hours,2]
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
 
 ## Net Demand uncertainty ##
-ndprobs = CSV.read(string(default_data_fol , "dist_input_",stochID,"_nd.csv"))
+ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_nd.csv"))
 ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
 ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
 
@@ -237,7 +243,7 @@ dem_real = dem .* vdem
 # --------------------------------------------------------------------------------------
 # GENERATOR DATA
 # -------------------------------------------
-genset = CSV.read(string(default_data_fol,"complete_generator_listing_ERCOT_012019.csv"), missingstring ="NA")
+genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -300,8 +306,8 @@ for i in 1:length(names(wind_avail))
 end
 
 ### Demand Response
-if parse(availID)!=0
-    dr_avail = CSV.read(string(default_data_fol,availID,".csv"))
+if parse(inputs[1,:availID])!=0
+    dr_avail = CSV.read(string(default_data_fol,inputs[1,:availID],".csv"))
     # remove first col
     dr_avail = dr_avail[:,2:ncol(dr_avail)]
     # sub in new info
@@ -340,13 +346,19 @@ end
 ### VARIABLES ###
 # @variable(m, 0 <= x <= 2 )
 @variable(m, z[1:n_gsl,1:n_t]) # slow generator startup
-# @variable(m, 0 <= w[1:n_gsl,1:n_t] <= 1) # slow generator commitment RELAXED BINARY
-@variable(m, w[1:n_gsl,1:n_t], Bin) # slow generator commitment TRUE BINARY
+if trueBinaryStartup
+    @variable(m, w[1:n_gsl,1:n_t], Bin) # slow generator commitment TRUE BINARY
+else
+    @variable(m, 0 <= w[1:n_gsl,1:n_t] <= 1) # slow generator commitment RELAXED BINARY
+end
 
 #real-time commitment, startup
 @variable(m, v[1:n_g,1:n_t,1:n_omega]) # generator startup
-# @variable(m, 0 <= u[1:n_g,1:n_t,1:n_omega] <= 1) # generator commitment RELAXED BINARY
-@variable(m, u[1:n_g,1:n_t,1:n_omega], Bin) # generator commitment TRUE BINARY
+if trueBinaryStartup
+    @variable(m, u[1:n_g,1:n_t,1:n_omega], Bin) # generator commitment TRUE BINARY
+else
+    @variable(m, 0 <= u[1:n_g,1:n_t,1:n_omega] <= 1) # generator commitment RELAXED BINARY
+end
 
 #production variables
 @variable(m, p[1:n_g,1:n_t,1:n_omega] >= 0) #generator production
@@ -415,10 +427,8 @@ end
     start_cost[g,t,o] >= v[g,t,o] * startup[g])
 
 #RAMP RATE -
-if ramp_constraint
     @constraint(m,[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
         p[g,t,o] - p[g,t-1,o] <= (rampmax[g] * pmax[g]))
-end
 
 # ------ DR USAGE LIMITS
 # Require that each period starts at the beginning of a new day
@@ -471,10 +481,10 @@ if !isdir(output_fol)
 end
 
 ## save a copy of inputs to the output file
-inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))
-inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
-CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
-
+# inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))
+# inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
+# CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
+writecsvmulti(inputs,outputfol,"inputfile",multiTF,periodsave)
 
 # --------------------------------------------------------------------------------------
 # SAVE OUTPUT
@@ -482,9 +492,9 @@ CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
 
 # save workspace: m and certain inputs
 # vdr, pro, pf, varcost, various indices...
-try
-    @save string(output_fol,"workspace.jld2") m vdr pro p
-end
+# try
+#     @save string(output_fol,"workspace.jld2") m vdr pro p
+# end
 
 # check production
 # print("schedule of DR")
@@ -500,7 +510,7 @@ y = getvalue(p[GDR,:,:])
 y_out = convert3dto2d(y,1, 3,  2,
     vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
      genset[dr_ind,:plantUnique])
-CSV.write(string(output_fol,"DR_production.csv"), y_out)
+writecsvmulti(y_out,output_fol,"DR_production",multiTF,periodsave)
 
 # display(y)
 # print("production of slow generators:")
@@ -509,7 +519,8 @@ zs = getvalue(p[GSL,:,:])
 y_out = convert3dto2d(zs,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[slow_ind,:plantUnique])
-CSV.write(string(output_fol,"slow_production.csv"), y_out)
+writecsvmulti(y_out,output_fol,"slow_production",multiTF,periodsave)
+
 
 # display(zs)
 # print("production of fast generators:")
@@ -517,7 +528,8 @@ zf = getvalue(p[GF,:,:])
 y_out = convert3dto2d(zf,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[fast_ind,:plantUnique])
-CSV.write(string(output_fol,"fast_production.csv"), y_out)
+writecsvmulti(y_out,output_fol,"fast_production",multiTF,periodsave)
+
 # display(zf)
 
 # check commitment
@@ -526,13 +538,13 @@ CSV.write(string(output_fol,"fast_production.csv"), y_out)
 w_out = getvalue(w)
 wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-CSV.write(string(output_fol,"slow_commitment.csv"), wdf)
+writecsvmulti(wdr,output_fol,"slow_commitment",multiTF,periodsave)
 
 # print("startup of slow generators:")
 z_out = getvalue(z)
 zdf = DataFrame(transpose(z_out))
 names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-CSV.write(string(output_fol,"slow_startup.csv"), zdf)
+writecsvmulti(zdf,output_fol,"slow_startup",multiTF,periodsave)
 
 # display(getvalue(z))
 
@@ -542,7 +554,7 @@ u_out = getvalue(u)
 y_out = convert3dto2d(u_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
-CSV.write(string(output_fol,"u_commitment.csv"), y_out)
+writecsvmulti(y_out,output_fol,"u_commitment",multiTF,periodsave)
 
 # print("startup of all generators")
 # display(getvalue(v))
@@ -550,7 +562,7 @@ v_out = getvalue(v)
 y_out = convert3dto2d(v_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
-CSV.write(string(output_fol,"v_startup.csv"), y_out)
+writecsvmulti(y_out,output_fol,"v_startup",multiTF,periodsave)
 
 # check costs
 # print("total cost")
@@ -575,7 +587,7 @@ output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
                             TotVarCst = totvarcost,
                             FracStartupCost = totstartupcost/totcost,
                             FracVarCost = totvarcost/totcost,
-                            timeseries = timeseriesID,
-                            stoch_scenario = stochID)
+                            timeseries = inputs[1,:timeseriesID],
+                            stoch_scenario = inputs[1,:stochID])
 
-CSV.write(string(output_fol,"summary_stats.csv"), output_summary)
+writecsvmulti(output_summary,output_fol,"summary_stats",multiTF,periodsave)

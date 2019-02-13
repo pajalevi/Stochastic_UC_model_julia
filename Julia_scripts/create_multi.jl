@@ -26,7 +26,7 @@ function create_multi(periodhrs, overlaphrs, runID, drID, stochID, headfol;
         firstp = starts[i]
         lastp = starts[i] + periodhrs - 1
         hours = collect(firstp:lastp)
-        CSV.write(string(outputfol,"/periods_",i,"_",firstp,"-",lastp,".csv"),DataFrame(hour=hours),header=false)
+        CSV.write(string(outputfol,"/periods_",i,"_",firstp,"_",lastp,".csv"),DataFrame(hour=hours),header=false)
     end
 
     # copy over other folders from default folder
