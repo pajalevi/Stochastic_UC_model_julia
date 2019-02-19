@@ -62,7 +62,7 @@ test = Gurobi.Env() # test that gurobi is working
 
 # USER PARAMS #
 no_vars = false #stops execution before making variables
-debug = true  # stops execution before solving model
+debug = false  # stops execution before solving model
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
@@ -121,7 +121,7 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 
 # PARSE CMD LINE ARGS #
-ARGNAMES = ["<date>" ,"<inputs_file_name>", "<multi-runTF>", "<period_name>" ]
+ARGNAMES = ["date" ,"inputs_file_name", "multi-runTF", "period_name" ]
 defaultARGS = [Dates.format(Dates.now(),"Y-m-d_HH-MM-SS"),"inputs_ercot.csv","true","periods_1_1_48.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
@@ -132,23 +132,25 @@ if nargs == 4
     input_file_name = localARGS[2]
     multiTF = parse(Bool,lowercase(localARGS[3]))
     periodID = localARGS[4]
-elseif nargs ==2
+elseif nargs ==3
     submitdate = localARGS[1]
     input_file_name = localARGS[2]
     multiTF = parse(Bool,lowercase(localARGS[3]))
     if !multiTF
         error("If doing a multi-period run, need period ID")
     end
-elseif nargs > 3
+elseif nargs > 4
     error(string("Too many arguments supplied. Need ",join(ARGNAMES[1,:]," ")))
-elseif nargs <2
+elseif nargs <3
     warn("not enough arguments supplied. Need ", join(ARGNAMES[1,:]," "))
 end
 
-inputs = CSV.read(string(params_fol,input_file_name))
-@show inputs
-inputs[:,:rowkey] = 1
-inputs = unstack(inputs,:rowkey, Symbol("Input name"), :Value)
+read_inputs = CSV.read(string(params_fol,input_file_name))
+@show read_inputs
+read_inputs = vcat(read_inputs, DataFrame(input_name = ARGNAMES[1:length(localARGS)], value = localARGS, comments = missing))
+@show read_inputs
+read_inputs[:,:rowkey] = 1
+inputs = unstack(read_inputs,:rowkey, :input_name, :value)
 
 # parse out non-string inputs
 startlim = parse(Float64,inputs[1,:startlim])
@@ -228,9 +230,10 @@ ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues l
 test = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
 vdem = test[1]
 pro = test[2]
-if sum(pro) != 1
-    error("sum of probabilities is not one")
-end
+# if sum(pro) != 1
+    # error("sum of probabilities is not one, it is ", sum(pro))
+# end
+print("sum of probabilities is ", sum(pro))
 n_omega = length(pro) #redefine for new number of scenarios
 
 # to check vdr and p are constructed properly
@@ -484,7 +487,7 @@ end
 # inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))
 # inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
 # CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
-writecsvmulti(inputs,outputfol,"inputfile",multiTF,periodsave)
+writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
 
 # --------------------------------------------------------------------------------------
 # SAVE OUTPUT
@@ -538,7 +541,7 @@ writecsvmulti(y_out,output_fol,"fast_production",multiTF,periodsave)
 w_out = getvalue(w)
 wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-writecsvmulti(wdr,output_fol,"slow_commitment",multiTF,periodsave)
+writecsvmulti(wdf,output_fol,"slow_commitment",multiTF,periodsave)
 
 # print("startup of slow generators:")
 z_out = getvalue(z)
