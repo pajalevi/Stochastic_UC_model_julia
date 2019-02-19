@@ -62,7 +62,7 @@ test = Gurobi.Env() # test that gurobi is working
 
 # USER PARAMS #
 no_vars = false #stops execution before making variables
-debug = false  # stops execution before solving model
+# debug = true  # stops execution before solving model
 
 sherlock_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
 sherlock_input_file = "inputs/"
@@ -87,8 +87,10 @@ laptop_params_fol = "Julia_UC_Github/Julia_scripts/"
 #             "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
 
 ## ERCOT DATASET
+## DR is added to slow/fast categories depending on value of
+## DRtype (in inputs csv)
 slow_gens = ["HYDRO",
-            "COAL","NUCLEAR","DR","LANDFILL_GAS",
+            "COAL","NUCLEAR","LANDFILL_GAS",
             "BIOMASS","GAS","GAS_CC","GAS_ST"]
             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
 fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND"]
@@ -121,36 +123,42 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 
 # PARSE CMD LINE ARGS #
-ARGNAMES = ["date" ,"inputs_file_name", "multi-runTF", "period_name" ]
-defaultARGS = [Dates.format(Dates.now(),"Y-m-d_HH-MM-SS"),"inputs_ercot.csv","true","periods_1_1_48.csv"]
+ARGNAMES = ["date" ,"inputs_file_name","input_verion" ,"multi-runTF", "period_name" ]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","debug","true","periods_1_1_48.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
 
-if nargs == 4
+if nargs == 5
     submitdate = localARGS[1]
     input_file_name = localARGS[2]
-    multiTF = parse(Bool,lowercase(localARGS[3]))
-    periodID = localARGS[4]
-elseif nargs ==3
-    submitdate = localARGS[1]
-    input_file_name = localARGS[2]
-    multiTF = parse(Bool,lowercase(localARGS[3]))
-    if !multiTF
-        error("If doing a multi-period run, need period ID")
-    end
-elseif nargs > 4
+    input_version = localARGS[3]
+    multiTF = parse(Bool,lowercase(localARGS[4]))
+    periodID = localARGS[5]
+# elseif nargs == 3
+#     submitdate = localARGS[1]
+#     input_file_name = localARGS[2]
+#     multiTF = parse(Bool,lowercase(localARGS[3]))
+#     if !multiTF
+#         error("If doing a multi-period run, need period ID")
+#     end
+elseif nargs > 5
     error(string("Too many arguments supplied. Need ",join(ARGNAMES[1,:]," ")))
-elseif nargs <3
+elseif nargs <5
     warn("not enough arguments supplied. Need ", join(ARGNAMES[1,:]," "))
 end
 
+
 read_inputs = CSV.read(string(params_fol,input_file_name))
+read_inputs = read_inputs[:,[:input_name, Symbol(input_version)]]
+# add cmd line args to read_inputs file
+newdf = DataFrame(input_name = ARGNAMES[1:length(localARGS)], args = localARGS)
+names!(newdf.colindex,map(parse,["input_name",input_version]))
+read_inputs = vcat(read_inputs, newdf)
 @show read_inputs
-read_inputs = vcat(read_inputs, DataFrame(input_name = ARGNAMES[1:length(localARGS)], value = localARGS, comments = missing))
-@show read_inputs
+# ~ transpose read_inputs so that values can be referenced by name
 read_inputs[:,:rowkey] = 1
-inputs = unstack(read_inputs,:rowkey, :input_name, :value)
+inputs = unstack(read_inputs,:rowkey, :input_name, Symbol(input_version))
 
 # parse out non-string inputs
 startlim = parse(Float64,inputs[1,:startlim])
@@ -163,11 +171,12 @@ trueBinaryStartup = parse(Bool,lowercase(inputs[1,:trueBinaryStartup]))
 DRtype = parse(Int64,inputs[1,:DRtype])
 nrandp = parse(Int64,inputs[1,:nrandp])
 int_length = parse(Int64,inputs[1,:intlength])
+debug = !parse(Bool, lowercase(inputs[1,:solve_model]))
 
 if Sherlock
-    output_fol = string(sherlock_fol, sherlock_output_file, inputs[1,:outputID],"_",submitdate,"/")
+    output_fol = string(sherlock_fol, sherlock_output_file, input_version,"_",submitdate,"/")
 else
-    output_fol = string(laptop_fol, laptop_output_file, inputs[1,:outputID],"_",submitdate,"/")
+    output_fol = string(laptop_fol, laptop_output_file, input_version,"_",submitdate,"/")
 end
 subsel_data_fol = string(input_fol,inputs[1,:timeseriesID],"/")
 
@@ -227,13 +236,13 @@ ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Arr
 ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
 
 
-test = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
-vdem = test[1]
-pro = test[2]
+demandScenarios = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
+vdem = demandScenarios[1]
+pro = demandScenarios[2]
 # if sum(pro) != 1
     # error("sum of probabilities is not one, it is ", sum(pro))
 # end
-print("sum of probabilities is ", sum(pro))
+println("sum of probabilities is ", sum(pro))
 n_omega = length(pro) #redefine for new number of scenarios
 
 # to check vdr and p are constructed properly
@@ -246,6 +255,16 @@ dem_real = dem .* vdem
 # --------------------------------------------------------------------------------------
 # GENERATOR DATA
 # -------------------------------------------
+
+# adjust slow/fast defn based on DRtype
+if DRtype == 1
+    fast_gens = vcat(fast_gens, dr_gens)
+elseif (DRtype == 2) | (DRtype == 3)
+    slow_gens = vcat(slow_gens, dr_gens)
+else
+    error("DRtype must be 1, 2 or 3")
+end
+
 genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
@@ -343,6 +362,8 @@ m = Model(solver=GurobiSolver(Presolve=0))
 
 if no_vars
     error("just testing model so we are stopping here")
+else
+    println("begin building model")
 end
 
 # -----------------------------------------------------------------------------------------------------
@@ -365,7 +386,11 @@ end
 
 #production variables
 @variable(m, p[1:n_g,1:n_t,1:n_omega] >= 0) #generator production
-# @variable(m, p_dr[1:n_gdr, 1:n_t] >= 0) # DR day-ahead production commitment
+
+# if DR requires advance production schedule
+if DRtype == 3
+    @variable(m, p_dr[1:n_gdr, 1:n_t] >= 0) # DR day-ahead production commitment
+end
 
 # track startup costs
 @variable(m, start_cost[1:n_g, 1:n_t, 1:n_omega] >= 0)
@@ -377,7 +402,7 @@ end
 
 #SUPPLY-DEMAND
 @constraint(m,supplydemand[t=1:n_t, o=1:n_omega],
-    sum( p[g,t,o] for g=1:n_g) == dem_real[t,o])
+    sum( p[g,t,o] for g=1:n_g) >= dem_real[t,o])
 #DEMAND RAND
 # @constraint(m, dem_rand[t=TIME, o = SCENARIOS],
 #     dem_real[t,o] = dem[t] * vnd[t,o]) #THIS DOESNT NEED TO BE A CONSTRAINT?
@@ -388,9 +413,14 @@ end
 #GENMAX - only for GEN_NODR if dr is random
 @constraint(m,[g = 1:n_g, t = 1:n_t, o=1:n_omega],
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
+
+if DRtype == 3
 #GENMAXDR
-# @constraint(m,[g = 1:n_gdr, t = 1:n_t],
-#     p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
+    @constraint(m,[g = 1:n_gdr, t = 1:n_t],
+        p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
+    @constraint(m,[g=1:n_gdr,t = TIME, o = SCENARIOS],
+         p[GDR[g],t,o] == p_dr[g,t])
+end
 
 #START_S
 # @constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
@@ -483,11 +513,13 @@ if !isdir(output_fol)
     mkdir(output_fol)
 end
 
-## save a copy of inputs to the output file
+## save a copy of inputs & demand scenarios to the output file
 # inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))
 # inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
 # CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
 writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
+writecsvmulti(DataFrame(vdem),output_fol,"demandScenarios_vdem",multiTF,periodsave)
+writecsvmulti(DataFrame(pro),output_fol,"demandScenarios_prob",multiTF,periodsave)
 
 # --------------------------------------------------------------------------------------
 # SAVE OUTPUT
