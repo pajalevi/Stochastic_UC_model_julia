@@ -118,11 +118,11 @@ makeoutputs = function(days, firstdays, id, input_folder, output_folder, dr_name
   write.table(matrix(periods, ncol=1), file= paste0(output_folder,id,"/periods_",id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
   
   # first_periods = paste0("h",24*firstdays)
-  first_periods = 24*firstdays
+  first_periods = (24*(firstdays-1)+1)
   write.table(matrix(first_periods, ncol=1), file= paste0(output_folder,id,"/first_periods_",id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
   
   #remove first_periods from periods list to make notfirst_periods
-  firstsel = hours %in% (24*firstdays)
+  firstsel = hours %in% (24*(firstdays-1)+1)
   write.table(matrix(periods[!firstsel], ncol=1), file= paste0(output_folder,id,"/notfirst_periods_",id,".csv"), row.names = FALSE, quote = FALSE,col.names = FALSE, sep=",")
   
   ###### solar input ####

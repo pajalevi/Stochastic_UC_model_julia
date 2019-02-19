@@ -5,13 +5,13 @@ library(lubridate)
 
 data_directory = "/Users/patricia/Documents/Google Drive/stanford/SEED/"
 all_dat = read_csv(paste0(data_directory,"EBA_BA_level.csv"))
-plots_dir = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/plots/ERCOT_data/"
-data_out = "/Users/patricia/Documents/Google Drive/stanford/second year paper/Tutorial II/Data/unformatted data/"
+plots_dir = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/plots/ERCOT_data/"
+data_out = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/unformatted data/"
 
 # select PJM-ALL columns
 PJM = select(all_dat, contains("PJM-ALL"))
 caiso = select(all_dat, contains("CISO-ALL"))
-ercot = select(all_dat, contains("ERCO-ALL")) #ERCOT
+ercot = select(all_dat, X1,contains("ERCO-ALL")) #ERCOT
 rm(all_dat)
 
 # select date column 
@@ -27,11 +27,6 @@ date$wday = wday(date$X1, label=TRUE)
 #########################
 #ERCOT analysis
 
-# save ERCOT data to be read in by model later
-ercot_save = ercot
-names(ercot_save) = c("demand_forecast","total_interchange","demand","net_generation","forecast_error")
-write_csv(ercot_save, path = paste0(data_out,"/ercot_demand_data.csv"))
-
 ercot$error = ercot$`EBA.ERCO-ALL.DF.H` - ercot$`EBA.ERCO-ALL.D.H`
 ggplot(ercot,aes(error)) + geom_histogram() 
 # looks sorta normal
@@ -40,6 +35,12 @@ summary(ercot$error)
 # -5522.00  -577.00   -67.00   -33.55   470.00  6303.00      639 
 sd(ercot$error, na.rm=T)
 # [1] 1004.788
+
+# save ERCOT data to be read in by model later
+ercot_save = ercot
+names(ercot_save) = c("time_UTC","demand_forecast","total_interchange","demand","net_generation","forecast_error")
+write_csv(ercot_save, path = paste0(data_out,"/ercot_demand_data.csv"))
+
 
 # plot with a normal curve
 # from https://stackoverflow.com/questions/6967664/ggplot2-histogram-with-normal-curve
