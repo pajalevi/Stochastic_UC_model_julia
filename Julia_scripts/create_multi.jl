@@ -47,3 +47,18 @@ function create_multi(periodhrs, overlaphrs, runID,
 end
 #create_multi(7*24,12,"7d_12o_periods",
 # "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
+
+create_multi(7*24,6,"7d_6o_periods",
+"/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
+
+create_multi(7*24,24,"7d_24o_periods",
+"/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
+
+create_multi(7*24,36,"7d_36o_periods",
+"/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
+
+create_multi(10*24,12,"10d_12o_periods",
+"/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
+
+create_multi(14*24,12,"14d_12o_periods",
+"/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")

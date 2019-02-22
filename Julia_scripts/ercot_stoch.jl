@@ -186,7 +186,7 @@ if multiTF
     periodnum = pbits[2]
     periodfirst = pbits[3]
     periodlast = pbits[4]
-    periodsave = string("p",periodnum,"_",periodfirst,"-",periodlast)
+    periodsave = string("p",periodnum,"_",periodfirst,"_",periodlast)
 end
 
 # --------------------------------------------------------------------------------------
@@ -235,10 +235,17 @@ ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_
 ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
 ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
 
+if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv"))
+    demandScenarios = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
+    vdem = demandScenarios[1]
+    pro = demandScenarios[2]
+    writecsvmulti(DataFrame(vdem),subsel_data_fol,string("demandScenarios_vdem","_",inputs[1,:stochID]),multiTF,periodsave)
+    writecsvmulti(DataFrame(pro),subsel_data_fol,string("demandScenarios_prob","_",inputs[1,:stochID]),multiTF,periodsave)
+else
+    vdem = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv")))
+    pro = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_prob","_",inputs[1,:stochID],"_",periodsave,".csv")))
+end
 
-demandScenarios = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
-vdem = demandScenarios[1]
-pro = demandScenarios[2]
 # if sum(pro) != 1
     # error("sum of probabilities is not one, it is ", sum(pro))
 # end
@@ -518,8 +525,6 @@ end
 # inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
 # CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
 writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
-writecsvmulti(DataFrame(vdem),output_fol,"demandScenarios_vdem",multiTF,periodsave)
-writecsvmulti(DataFrame(pro),output_fol,"demandScenarios_prob",multiTF,periodsave)
 
 # --------------------------------------------------------------------------------------
 # SAVE OUTPUT

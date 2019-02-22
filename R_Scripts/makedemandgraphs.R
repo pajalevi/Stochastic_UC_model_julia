@@ -5,19 +5,19 @@ base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/
 output_fol_base = "Data/julia_output/"
 input_fol = "Data/julia_input/"
 
-intputfolID = "7d_12o_periods_10subsel"
-periodID = "2_157_324"
-periodID2 = "p2_157-324"
-stochID = "n3_m1.0_0.2pp"
-outputID = "10_int_multioutput"
+inputfolID = "test_multi" #"7d_12o_periods_10subsel"
+periodID = "1_5353_5400"
+periodID2 = "p1_5353-5400"
+stochID = "winter_ercot" #n3_m1.0_0.2pp"
+outputID = "test3_2019-02-20"
 
 # default_in_fol = paste0(base_fol,input_fol,"default/")
 default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
 instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
 output_fol = paste0(base_fol,output_fol_base,outputID,"/")
 
-all_periods = list.files(path = instance_in_fol)
-
+all_periods = list.files(path = instance_in_fol, pattern="periods")
+all_periods
 for(i in 1:length(all_periods)){
   xx = all_periods[i]
   periodinfo = strsplit(xx,"_")[[1]]
