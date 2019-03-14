@@ -91,9 +91,9 @@ laptop_params_fol = "Julia_UC_Github/Julia_scripts/"
 ## DRtype (in inputs csv)
 slow_gens = ["HYDRO",
             "COAL","NUCLEAR","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_CC","GAS_ST"]
+            "BIOMASS","GAS","GAS_CC"]
             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
-fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND"]
+fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND","GAS_ST"]
 dr_gens = ["DR"]
 notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO",
             "LANDFILL_GAS","NUCLEAR","OIL","SOLAR","WIND"    ]
@@ -124,7 +124,7 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 # PARSE CMD LINE ARGS #
 ARGNAMES = ["date" ,"inputs_file_name","input_verion" ,"multi-runTF", "period_name" ]
-defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","debug","true","periods_1_1_48.csv"]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","tiny","true","periods_1_5353_5400.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
@@ -195,11 +195,11 @@ end
 # first_periods = CSV.read(string(subsel_data_fol,"first_periods_",inputs[1,:timeseriesID],".csv"),datarow=1)[1]
 # notfirst_periods = CSV.read(string(subsel_data_fol,"notfirst_periods_",inputs[1,:timeseriesID],".csv"),datarow=1)[1]
 if multiTF
-    hours = CSV.read(string(subsel_data_fol,periodID),datarow=1)[1]
+    hours = CSV.read(string(subsel_data_fol,periodID),datarow=1,types=[Int])[1]
 else
-    hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1)[1]
+    hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1,types=[Int])[1]
 end
-n_days = convert(Int32,length(hours)/24)
+n_days = convert(Int32,ceil(length(hours)/24))
 n_periods = length(hours)
 
 # convert first and notfirst periods to indices
@@ -231,11 +231,12 @@ dem = dem2[hours,2]
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
 
 ## Net Demand uncertainty ##
-ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_nd.csv"))
-ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
-ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
 
 if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv"))
+    ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_nd.csv"))
+    ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
+    ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
+
     demandScenarios = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
     vdem = demandScenarios[1]
     pro = demandScenarios[2]
@@ -415,7 +416,7 @@ end
 #     dem_real[t,o] = dem[t] * vnd[t,o]) #THIS DOESNT NEED TO BE A CONSTRAINT?
 
 #GENMIN
-@constraint(m, [g= 1:n_g, t= 1:n_t, o=1:n_omega ],
+@constraint(m, mingen[g= 1:n_g, t= 1:n_t, o=1:n_omega ],
     p[g,t,o] >= pmin[g] * u[g,t,o])
 #GENMAX - only for GEN_NODR if dr is random
 @constraint(m,[g = 1:n_g, t = 1:n_t, o=1:n_omega],
@@ -425,7 +426,7 @@ if DRtype == 3
 #GENMAXDR
     @constraint(m,[g = 1:n_gdr, t = 1:n_t],
         p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
-    @constraint(m,[g=1:n_gdr,t = TIME, o = SCENARIOS],
+    @constraint(m,type3dr[g=1:n_gdr,t = TIME, o = SCENARIOS],
          p[GDR[g],t,o] == p_dr[g,t])
 end
 
@@ -467,7 +468,7 @@ end
     start_cost[g,t,o] >= v[g,t,o] * startup[g])
 
 #RAMP RATE -
-    @constraint(m,[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
+    @constraint(m,ramplim[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
         p[g,t,o] - p[g,t-1,o] <= (rampmax[g] * pmax[g]))
 
 # ------ DR USAGE LIMITS
@@ -475,26 +476,38 @@ end
 # to simplify computation
 
 #STARTLIM
-# number of startups per day
+# number of startups per period
 if startlim !=0
-    @constraint(m,[g = 1:n_gdr,d = 1:n_days],
-        sum(v[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= startlim)
+    # # per day
+    # @constraint(m,[g = 1:n_gdr,d = 1:n_days, o = SCENARIOS],
+    #     sum(v[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) <= startlim)
+    # per period
+    @constraint(m,limstart[g = 1:n_gdr, o = SCENARIOS],
+        sum(v[GDR[g],t,o] for t = TIME) <= startlim)
 end
 #uses z, the first stage startup var - corresponds to slow DR
 
 #HOURLIM
-#number of hours used per day
+#number of hours used per period
 if hourlim != 0
-    @constraint(m,[g = 1:n_gdr,d = 1:n_days],
-        sum(u[GDR[g],t] for t = (24*(d-1)+1):(24*d)) <= hourlim)
+    # # per day
+    # @constraint(m,[g = 1:n_gdr,d = 1:n_days, o = SCENARIOS],
+    #     sum(u[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) <= hourlim)
+    # per period
+    @constraint(m,limhrs[g = 1:n_gdr, o = SCENARIOS],
+        sum(u[GDR[g],t,o] for t = TIME) <= hourlim)
 end
 #uses w, the first stage startup var - corresponds to slow DR
 
 #ENERGYLIM
-# amount of energy used per day
+# amount of energy used per period
 if energylim != 0
-    @constraint(m,[g = 1:n_gdr,d = 1:n_days ,o=SCENARIOS],
-        sum(p[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) <= energylim)
+    # per day
+    # @constraint(m,[g = 1:n_gdr,d = 1:n_days ,o=SCENARIOS],
+    #     sum(p[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) <= energylim)
+    # per period
+    @constraint(m,limenergy[g = 1:n_gdr, o=SCENARIOS],
+        sum(p[GDR[g],t,o] for t = TIME) <= energylim)
 end
 
 ### OBJECTIVE ###
@@ -631,3 +644,75 @@ output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
                             stoch_scenario = inputs[1,:stochID])
 
 writecsvmulti(output_summary,output_fol,"summary_stats",multiTF,periodsave)
+
+# Get dual variables and save
+
+#supplydemand #2D
+sd_shadow = DataFrame(getdual(supplydemand))
+writecsvmulti(sd_shadow,output_fol,"supplydemand_shadow",multiTF,periodsave)
+
+### mingen ###
+mingen_shadow = getdual(mingen)
+mingen_sf = convert3dto2d(mingen_shadow,1, 3,  2,
+    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+     genset[:,:plantUnique])
+# only save rows where there is a nonzero shadow price
+shadowsum = sum(convert(Array{Float64},mingen_sf[:,1:n_omega]),2)
+saveind = find(shadowsum .!= 0)
+writecsvmulti(mingen_sf[saveind,:],output_fol,"mingen_shadow",multiTF,periodsave)
+
+### type3dr ###
+if DRtype == 3
+    type3dr_shadow = getdual(type3dr)
+    type3dr_sf = convert3dto2d(type3dr_shadow,1, 3,  2,
+        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+         genset[dr_ind,:plantUnique])
+    # only save rows where there is a nonzero shadow price
+    shadowsum = sum(convert(Array{Float64},type3dr_sf[:,1:n_omega]),2)
+    saveind = find(shadowsum .!= 0)
+    writecsvmulti(type3dr_sf[saveind,:],output_fol,"type3dr_shadow",multiTF,periodsave)
+end
+
+### ramplim ###
+rampl_shadow = getdual(ramplim)
+rampl_sf = convert3dto2d(rampl_shadow,1, 3,  2,
+    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+     genset[:,:plantUnique])
+# only save rows where there is a nonzero shadow price
+shadowsum = sum(convert(Array{Float64},rampl_sf[:,1:n_omega]),2)
+saveind = find(shadowsum .!= 0)
+writecsvmulti(rampl_sf[saveind,:],output_fol,"ramplimit_shadow",multiTF,periodsave)
+
+### limstart ###
+if startlim !=0
+    limstart_shadow = getdual(limstart)
+    limstart_sf = convert3dto2d(limstart_shadow,1, 3,  2,
+        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+         genset[dr_ind,:plantUnique])
+    # only save rows where there is a nonzero shadow price
+    shadowsum = sum(convert(Array{Float64},limstart_sf[:,1:n_omega]),2)
+    saveind = find(shadowsum .!= 0)
+    writecsvmulti(limstart_sf[saveind,:],output_fol,"startlimit_shadow",multiTF,periodsave)
+end
+### limhrs ###
+if hourlim != 0
+    limhrs_shadow = getdual(limhrs)
+    limhrs_sf = convert3dto2d(limhrs_shadow,1, 3,  2,
+        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+         genset[dr_ind,:plantUnique])
+    # only save rows where there is a nonzero shadow price
+    shadowsum = sum(convert(Array{Float64},limhrs_sf[:,1:n_omega]),2)
+    saveind = find(shadowsum .!= 0)
+    writecsvmulti(limhrs_sf[saveind,:],output_fol,"hourlimit_shadow",multiTF,periodsave)
+end
+### limenergy ###
+if energylim !=0
+    limenergy_shadow = getdual(limenergy)
+    limenergy_sf = convert3dto2d(limenergy_shadow,1, 3,  2,
+        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+         genset[dr_ind,:plantUnique])
+    # only save rows where there is a nonzero shadow price
+    shadowsum = sum(convert(Array{Float64},limenergy_sf[:,1:n_omega]),2)
+    saveind = find(shadowsum .!= 0)
+    writecsvmulti(limenergy_sf[saveind,:],output_fol,"energylimit_shadow",multiTF,periodsave)
+end
