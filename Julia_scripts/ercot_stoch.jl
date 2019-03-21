@@ -400,8 +400,8 @@ if DRtype == 3
     @variable(m, p_dr[1:n_gdr, 1:n_t] >= 0) # DR day-ahead production commitment
 end
 
-# track startup costs
-@variable(m, start_cost[1:n_g, 1:n_t, 1:n_omega] >= 0)
+# track number of startups to determine costs
+@variable(m, start_num[1:n_g, 1:n_t, 1:n_omega] >= 0)
 
 
 # -----------------------------------------------------------------------------------------------------
@@ -463,9 +463,9 @@ end
 # @constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
 #      p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])
 
-#STARTUP COSTS
+#STARTUP COUNT
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
-    start_cost[g,t,o] >= v[g,t,o] * startup[g])
+    start_num[g,t,o] >= v[g,t,o])
 
 #RAMP RATE -
     @constraint(m,ramplim[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
@@ -483,7 +483,7 @@ if startlim !=0
     #     sum(v[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) <= startlim)
     # per period
     @constraint(m,limstart[g = 1:n_gdr, o = SCENARIOS],
-        sum(v[GDR[g],t,o] for t = TIME) <= startlim)
+        sum(start_num[GDR[g],t,o] for t = TIME) <= startlim)
 end
 #uses z, the first stage startup var - corresponds to slow DR
 
@@ -513,7 +513,7 @@ end
 ### OBJECTIVE ###
 # @objective(m, Max, 5x + 3*y )
 @objective(m, Min, sum(pro[o] *
-    sum(start_cost[g,t,o] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
+    sum(start_num[g,t,o]*startup[g] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 
 # Check model
