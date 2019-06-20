@@ -506,6 +506,8 @@ alldat_sub = alldat[!allothersel,]
 battsel = which(alldat_sub$technologyAll != "Batteries")
 alldat_sub = alldat_sub[battsel,]
 
+# remove plants that only exist in EIA dataset
+
 #---------------------------#
 # fill in missing PMin   ####
 #---------------------------#

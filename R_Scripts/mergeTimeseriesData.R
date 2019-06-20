@@ -1,119 +1,213 @@
 # mergeTimeseriesData.R
 # reads in timeseries data from multi-period runs
 # and concatenates it into one file
+
+# loadTimeseriesData reads in the designated type of timeseries data
+# and merges multiple periods into one dataframe
+
+# loadproduction is its precursor, which load slow and fast production data
+# concatenates them, and merges multiple periods
+
+# Feb 2018
+# Patricia Levi
+
 library(tidyverse)
-base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
-output_fol_base = "Data/julia_output/"
-input_fol = "Data/julia_input/"
+library(data.table)
 
-inputfolID = "test_multi" #"7d_12o_periods_10subsel"
-outputID = "test3_2019-02-20"
+### KLUDGE ###
+# this is to select just the periods I wanted this one time
+# allowedperiods = read.csv(paste0("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/base_2019-02/","periods_overlap_base_advNot2.csv"))
+########
 
-instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
-output_fol = paste0(base_fol,output_fol_base,outputID,"/")
+loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_fol, nscen=25,
+                               probabilities = T,dist_ID#,
+                               # validP = allowedperiods
+                               ){
+ # dist_ID="winter_ercot"
+   # outputfol is the output data folder
+  # overlap is the number of hours of overlap between periods
+  # dataTypes is the name of the file before the periodID
+  #     e.g. "fast_production
+  # dataStage indicates the format of the data, as data saved from the first stage
+  #     has a different format than data from the second stage which has multiple realizations
+  # input_fol is needed if dataStage=2
+  # nscen (number of scenarios) also only needed if dataStage=2
+ # print(paste("allowed files are", validP$x))
+  
+  all_files = list.files(path=output_fol, pattern = dataType)
+  if(length(all_files) == 0) { stop("no files found matching dataType ", dataType, " in folder ", output_fol)}
+  
+  for(i in 1:length(all_files)){
+    print(all_files[i])
+    # load period info for this file
+    xx = all_files[i]
+    periodinfo = strsplit(xx,"_|\\.|-|p")[[1]]
+    lenInfo = length(periodinfo)
+    firstperiod = as.numeric(periodinfo[lenInfo - 2])
+    lastperiod = as.numeric(periodinfo[lenInfo - 1])
+    periodnum = as.numeric(periodinfo[lenInfo - 3])
+    
+    # if(periodnum %in% validP$x){
+    #   print(paste("period number ", periodnum, " has overlap"))
+ 
+      # load file
+      output = read_csv(file = paste0(output_fol,all_files[i]))
+      
+      # add period num
+      output$nperiod = periodnum
+      
+      if(dataStage == 2){
+        # make t represent the hour of year, not hour of perood
+        output$t = output$t + firstperiod -1
+        
+        # gather scenario info into column
+        output = output %>%
+          gather(key = "scenario",value = "value", starts_with("o"))
+        
+        # load probability associated with each scenario
+        # and associate correct label
+        if(probabilities){
+          probs = read_csv(file = paste0(input_fol,"demandScenarios_prob_",dist_ID,"_p",
+                                         periodnum,"_",firstperiod,"_",lastperiod,
+                                         ".csv"))
+          probs$scenario = paste0("o",1:nscen)
+          names(probs) = c("prob","scenario")
+          
+          # format as datatables for faster merge. (~26x faster!!) 
+          # see https://stackoverflow.com/questions/37551433/speed-up-merging-many-dataframes-in-r
+          # merge probability with output
+          outputdt = as.data.table(output)
+          probdt = as.data.table(probs)
+          output = merge(outputdt, probdt, all.x = T, by="scenario")
+        }
+        
+      } else if (dataStage == 1){
+        # add a t column
+        output$t = firstperiod:lastperiod
+      } else{ stop("dataStage ", dataStage," is invalid. must be 1 or 2")}
+      
+      # trim output
+      if(periodnum ==1){
+        # trim end
+        tSel = which(output$t <= lastperiod - overlaplength/2 &
+                       output$t >= firstperiod + 4)
+      } else{
+        # trim both sides
+        tSel = which(output$t <= lastperiod - overlaplength/2 & 
+                       output$t >= firstperiod + overlaplength/2) }
+      output = output[tSel,] 
+      
+      # combine with previous
+      if(i==1){ output_all = output 
+      } else { 
+        output_all = rbind(output_all, output) }
+      
+      # error check
+      t_jumps = diff(unique(output_all$t))
+      if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlaplength))){
+        warning("might have messed up trimming periods. Diffs in unique(t) are \n", t_jumps) }
+    }
+  # }
+  return(output_all)
+}
 
-loadproduction <- function(instance_in_fol, output_fol) {
+loadproduction <- function(instance_in_fol, output_fol, overlaplength) {
   # instance_in_fol is the periods folder (in inputs)
   # output_fol is the output data folder
+  # overlap is the number of hours of overlap between periods
+  
   all_periods = list.files(path = instance_in_fol)
   for(i in 1:length(all_periods)){
+    # load period info
     xx = all_periods[i]
     periodinfo = strsplit(xx,"_")[[1]]
     firstperiod = as.numeric(periodinfo[3])
     lastperiod = as.numeric(strsplit(periodinfo[4],"\\.")[[1]][1])
     periodID = paste0(periodinfo[2],"_",periodinfo[3],"_",periodinfo[4])
     
+    # load and combine model output
     slow_prod = read_csv(file = paste0(output_fol,"slow_production_p",periodinfo[2],"_",periodinfo[3],"-",periodinfo[4]))
     slow_prod$speed = "slow"
     fast_prod = read_csv(file = paste0(output_fol,"fast_production_p",periodinfo[2],"_",periodinfo[3],"-",periodinfo[4]))
     fast_prod$speed = "fast"
     prod = rbind(slow_prod, fast_prod)
     
+    # make t represent the hour of year, not hour of perood
     prod$t = prod$t + firstperiod -1
     
-    #TRIM BOTH SIDES UNLESS THIS IS FIRST PERIOD. THEN TRIM END
+    # trim prod
     if(as.numeric(periodinfo[2]) ==1){
-      
+      # trim end
+      tSel = which(prod$t <= lastperiod - overlaplength/2)
     } else{
-      
+      # trim both sides
+      tSel = which(prod$t <= lastperiod - overlaplength/2 & prod$t >= firstperiod + overlaplength/2)
     }
-    # HOW TO FIND OVERLAP LENGTH FOR JUST ONE PERIOD?
-    # 1) have it as an input
-    # 2) read it from inputs file
+    prod = prod[tSel,] 
     
-    # overlaplength = lastperiod_prev - firstperiod +1
-    # ## DEAL WITH OVERLAP
-    # ## TRIM ONLY THE JUST-LOADED OBJECT
-    # # find # of periods of overlap
-    # # remove half of those from former, half from latter
-    # # if odd number, remove more from latter
-    # if(overlaplength %% 2 == 0){
-    #   # remove stuff from end of previous period
-    #   # lastsavedperiod = firstperiod + (overlaplength/2) -1
-    #   # rmprevsel=(prod_all$t <= lastperiod_prev & prod_all$t > lastsavedperiod)
-    #   # prod_all = prod_all[!rmprevsel,]
-    #   
-    #   # remove stuff from beginning of new period
-    #   first
-    # }
-    
-    
+    # combine with previous
     if(i==1){ prod_all = prod 
     } else { 
       prod_all = rbind(prod_all, prod)
     }
     
-    # PERIODS MIGHT NOT BE SEQUENTIAL
-    firstperiod_prev = firstperiod
-    lastperiod_prev = lastperiod
+    # error check
+    t_jumps = diff(unique(prod_all$t))
+    if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlaplength))){
+      warning("might have messed up trimming periods. Diffs in unique(t) are \n", t_jumps)
+    }
   }
   return(prod_all)
 }
 
-  loadstuff <- function(instance_in_fol, output_fol) {
-    # instance_in_fol is the periods folder (in inputs)
-    # output_fol is the output data folder
-    all_periods = list.files(path = instance_in_fol)
-    
-    #CREATE DUMMY HOLDERS?
-    
-    for(i in 1:length(all_periods)){
-      xx = all_periods[i]
-      periodinfo = strsplit(xx,"_")[[1]]
-      periodID = paste0(periodinfo[2],"_",periodinfo[3],"_",periodinfo[4])
-      # makedemandgraphs(default_in_fol, instance_in_fol, output_fol, periodID,stochID,outputID)
-    
-    
-    
-      slow_commit = read_csv(file = paste0(output_fol,"slow_commitment_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
-      
-      timeperiods = read_csv(file = paste0(instance_in_fol,"periods_",periodID), col_names = "hour")
-      
-      # slow_commit = read_csv(file = paste0(output_fol,"slow_commitment.csv"))
-      slow_commit = read_csv(file = paste0(output_fol,"slow_commitment_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
-      slow_commit$t = timeperiods$hour
-      
-      slow_prod = read_csv(file = paste0(output_fol,"slow_production_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
-      slow_prod$speed = "slow"
-      fast_prod = read_csv(file = paste0(output_fol,"fast_production_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
-      fast_prod$speed = "fast"
-      prod = rbind(slow_prod, fast_prod)
-      
-      # load dr dispatch
-      
-      #MERGE FILES
-      # removing a portion of beginning and end...
-    }
-    #SAVE FILES
-    
-    #MAKE GRAPHS
-    
-    #DETERMINE KEY VALUES
-    # max first-stage committed capacity
-    # max up and down ramp rates of rest of system (flexibility value)
-    # co2 emissions
-    
-  }
+# test3prod= loadproduction(instance_in_fol, output_fol,12)
+
+
+
+  # loadstuff <- function(instance_in_fol, output_fol) {
+  #   # instance_in_fol is the periods folder (in inputs)
+  #   # output_fol is the output data folder
+  #   all_periods = list.files(path = instance_in_fol)
+  #   
+  #   #CREATE DUMMY HOLDERS?
+  #   
+  #   for(i in 1:length(all_periods)){
+  #     xx = all_periods[i]
+  #     periodinfo = strsplit(xx,"_")[[1]]
+  #     periodID = paste0(periodinfo[2],"_",periodinfo[3],"_",periodinfo[4])
+  #     # makedemandgraphs(default_in_fol, instance_in_fol, output_fol, periodID,stochID,outputID)
+  #   
+  #   
+  #   
+  #     slow_commit = read_csv(file = paste0(output_fol,"slow_commitment_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
+  #     
+  #     timeperiods = read_csv(file = paste0(instance_in_fol,"periods_",periodID), col_names = "hour")
+  #     
+  #     # slow_commit = read_csv(file = paste0(output_fol,"slow_commitment.csv"))
+  #     slow_commit = read_csv(file = paste0(output_fol,"slow_commitment_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
+  #     slow_commit$t = timeperiods$hour
+  #     
+  #     slow_prod = read_csv(file = paste0(output_fol,"slow_production_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
+  #     slow_prod$speed = "slow"
+  #     fast_prod = read_csv(file = paste0(output_fol,"fast_production_p",periodinfo[1],"_",periodinfo[2],"-",periodinfo[3]))
+  #     fast_prod$speed = "fast"
+  #     prod = rbind(slow_prod, fast_prod)
+  #     
+  #     # load dr dispatch
+  #     
+  #     #MERGE FILES
+  #     # removing a portion of beginning and end...
+  #   }
+  #   #SAVE FILES
+  #   
+  #   #MAKE GRAPHS
+  #   
+  #   #DETERMINE KEY VALUES
+  #   # max first-stage committed capacity
+  #   # max up and down ramp rates of rest of system (flexibility value)
+  #   # co2 emissions
+  #   
+  # }
 
 
   # mergeOtherData()

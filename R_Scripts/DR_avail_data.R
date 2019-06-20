@@ -3,13 +3,13 @@
 # copied from write_gams_input.R
 # separated out for easier management
 # Julia model
-
+library(lubridate)
 
 source('/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/R_scripts/hour_of_year.R')
 
 ### for daytime: 7am to 11pm
-dr_input_name = "dr_availability_daytime_2016.csv"
-output_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_ercot_input/"
+dr_input_name = "dr_availability_always_2016.csv"
+output_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/ercot_default/"
 
 days_in_year = 8760+24
 
@@ -20,7 +20,7 @@ for(i in 1:days_in_year){
   thedate = date_from_yearhour(year = 2015, year_hour = i)
   thehour = hour(thedate)
   # themonth = month(thedate)
-  if(thehour >=7 & thehour < 23  ){ # PJM on peak
+  if(thehour >=16 & thehour < 23  ){ # PJM on peak
     MOO_hours = c(MOO_hours, i)
   }
 }

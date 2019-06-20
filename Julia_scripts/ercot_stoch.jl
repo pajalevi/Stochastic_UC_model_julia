@@ -1,4 +1,4 @@
-# full_universe_stoch.jl
+ # full_universe_stoch.jl
 # solves the full universe version of a stochastic two stage
 # unit-commitment model in which slow generators are committed in the
 # first stage and fast generators can be committed in real time.
@@ -620,14 +620,14 @@ writecsvmulti(y_out,output_fol,"v_startup",multiTF,periodsave)
 # check costs
 # print("total cost")
 totcost = getvalue(sum(pro[o] *
-    sum(start_cost[g,t,o] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
+    sum(start_num[g,t,o]*startup[g] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 # display(totcost)
 # print("startup cost")
 # display("text/plain",getvalue(start_cost))
 # print("fraction of total costs that are startup costs")
 totstartupcost = getvalue(sum(pro[o] *
-    sum(start_cost[g,t,o] for g = GENERATORS, t = TIME)
+    sum(start_num[g,t,o]*startup[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 # display("text/plain",totstartupcost/totcost)
 # print("fraction of total costs that are var cost")
@@ -674,45 +674,45 @@ if DRtype == 3
 end
 
 ### ramplim ###
-rampl_shadow = getdual(ramplim)
-rampl_sf = convert3dto2d(rampl_shadow,1, 3,  2,
-    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
-     genset[:,:plantUnique])
-# only save rows where there is a nonzero shadow price
-shadowsum = sum(convert(Array{Float64},rampl_sf[:,1:n_omega]),2)
-saveind = find(shadowsum .!= 0)
-writecsvmulti(rampl_sf[saveind,:],output_fol,"ramplimit_shadow",multiTF,periodsave)
-
-### limstart ###
-if startlim !=0
-    limstart_shadow = getdual(limstart)
-    limstart_sf = convert3dto2d(limstart_shadow,1, 3,  2,
-        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-         genset[dr_ind,:plantUnique])
-    # only save rows where there is a nonzero shadow price
-    shadowsum = sum(convert(Array{Float64},limstart_sf[:,1:n_omega]),2)
-    saveind = find(shadowsum .!= 0)
-    writecsvmulti(limstart_sf[saveind,:],output_fol,"startlimit_shadow",multiTF,periodsave)
-end
-### limhrs ###
-if hourlim != 0
-    limhrs_shadow = getdual(limhrs)
-    limhrs_sf = convert3dto2d(limhrs_shadow,1, 3,  2,
-        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-         genset[dr_ind,:plantUnique])
-    # only save rows where there is a nonzero shadow price
-    shadowsum = sum(convert(Array{Float64},limhrs_sf[:,1:n_omega]),2)
-    saveind = find(shadowsum .!= 0)
-    writecsvmulti(limhrs_sf[saveind,:],output_fol,"hourlimit_shadow",multiTF,periodsave)
-end
-### limenergy ###
-if energylim !=0
-    limenergy_shadow = getdual(limenergy)
-    limenergy_sf = convert3dto2d(limenergy_shadow,1, 3,  2,
-        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-         genset[dr_ind,:plantUnique])
-    # only save rows where there is a nonzero shadow price
-    shadowsum = sum(convert(Array{Float64},limenergy_sf[:,1:n_omega]),2)
-    saveind = find(shadowsum .!= 0)
-    writecsvmulti(limenergy_sf[saveind,:],output_fol,"energylimit_shadow",multiTF,periodsave)
-end
+# rampl_shadow = getdual(ramplim)
+# rampl_sf = convert3dto2d(rampl_shadow,1, 3,  2,
+#     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+#      genset[:,:plantUnique])
+# # only save rows where there is a nonzero shadow price
+# shadowsum = sum(convert(Array{Float64},rampl_sf[:,1:n_omega]),2)
+# saveind = find(shadowsum .!= 0)
+# writecsvmulti(rampl_sf[saveind,:],output_fol,"ramplimit_shadow",multiTF,periodsave)
+#
+# ### limstart ###
+# if startlim !=0
+#     limstart_shadow = getdual(limstart)
+#     limstart_sf = convert3dto2d(limstart_shadow,1, 3,  2,
+#         vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+#          genset[dr_ind,:plantUnique])
+#     # only save rows where there is a nonzero shadow price
+#     shadowsum = sum(convert(Array{Float64},limstart_sf[:,1:n_omega]),2)
+#     saveind = find(shadowsum .!= 0)
+#     writecsvmulti(limstart_sf[saveind,:],output_fol,"startlimit_shadow",multiTF,periodsave)
+# end
+# ### limhrs ###
+# if hourlim != 0
+#     limhrs_shadow = getdual(limhrs)
+#     limhrs_sf = convert3dto2d(limhrs_shadow,1, 3,  2,
+#         vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+#          genset[dr_ind,:plantUnique])
+#     # only save rows where there is a nonzero shadow price
+#     shadowsum = sum(convert(Array{Float64},limhrs_sf[:,1:n_omega]),2)
+#     saveind = find(shadowsum .!= 0)
+#     writecsvmulti(limhrs_sf[saveind,:],output_fol,"hourlimit_shadow",multiTF,periodsave)
+# end
+# ### limenergy ###
+# if energylim !=0
+#     limenergy_shadow = getdual(limenergy)
+#     limenergy_sf = convert3dto2d(limenergy_shadow,1, 3,  2,
+#         vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+#          genset[dr_ind,:plantUnique])
+#     # only save rows where there is a nonzero shadow price
+#     shadowsum = sum(convert(Array{Float64},limenergy_sf[:,1:n_omega]),2)
+#     saveind = find(shadowsum .!= 0)
+#     writecsvmulti(limenergy_sf[saveind,:],output_fol,"energylimit_shadow",multiTF,periodsave)
+# end

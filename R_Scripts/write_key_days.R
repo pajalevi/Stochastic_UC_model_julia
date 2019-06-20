@@ -1,0 +1,126 @@
+# write_key_days.R
+# March 2019
+# Patricia Levi
+# takes in key days (found in combine_run_results, but should be copied here)
+# and creates period input information that covers all the key days
+# with some buffer.
+library(tidyverse)
+
+base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
+output_fol_base = "Data/julia_output/"
+input_fol = "Data/julia_input/"
+inputfolID = "5d_6o_keyDays2"
+instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
+
+#### stuff to run alongside combine_run_results.R ####
+# find top X hours for min ramp rate across scenarios ####
+X = 70
+# prodramp could be with or without DR. Should be without DR if done after running the full script
+
+# TODO: prodramp has a $speed column - need to find max within each speed, not across speeds!
+
+prodslowsel = which(prodramp$speed == "slow")
+top10ind = which(rank(prodramp$ramp[prodslowsel]) <= X & prodramp$ramp[prodslowsel] < -1e-6)
+top10t = prodramp$t[prodslowsel[top10ind]]
+top10t
+unique(floor(top10t/24))
+length(unique(floor(top10t/24)))
+prodramp$ramp[prodslowsel[top10ind]]
+write.csv(top10t,file=paste0(output_fol,"top",X,"_minramp_hours.csv"))
+write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_slow_minramp_days.csv"))
+
+X=40
+prodfastsel = which(prodramp$speed == "fast")
+top10ind = which(rank(prodramp$ramp[prodfastsel]) <= X & prodramp$ramp[prodfastsel] < -1e-6)
+top10t = prodramp$t[prodfastsel[top10ind]]
+top10t
+unique(floor(top10t/24))
+length(unique(floor(top10t/24)))
+prodramp$ramp[prodfastsel[top10ind]]
+# write.csv(top10t,file=paste0(output_fol,"top",X,"_minramp_hours.csv"))
+write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_fast_minramp_days.csv"))
+
+# find top 10 hours for max ramp rate across scenarios ####
+# excluding start of sim
+X = 60
+# prodramp could be with or without DR.Should be without DR if done after running the full script
+# TODO: prodramp has a $speed column - need to find max within each speed, not across speeds!
+# TODO: find max ramp for whole system AND for fast generators
+# slow
+nostart = prodramp$t[prodslowsel]>6
+top10ind = which(rank(prodramp$ramp[prodslowsel[nostart]]) >= nrow(prodramp[prodslowsel[nostart],])-X)
+top10t = prodramp$t[prodslowsel[nostart]][top10ind]
+prodramp$ramp[prodslowsel[nostart]][top10ind]
+top10t
+unique(floor(top10t/24))
+length(unique(floor(top10t/24)))
+
+write.csv(top10t,paste0(output_fol,"top",X,"_slow_maxramp_hours.csv"))
+write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_slow_maxramp_days.csv"))
+
+# write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_slowcmt_days.csv"))
+# fast
+X=20
+nostart = prodramp$t[prodfastsel]>6
+top10ind = which(rank(prodramp$ramp[prodfastsel[nostart]]) >= nrow(prodramp[prodfastsel[nostart],])-X)
+top10t = prodramp$t[prodfastsel[nostart]][top10ind]
+prodramp$ramp[prodfastsel[nostart]][top10ind]
+top10t
+unique(floor(top10t/24))
+length(unique(floor(top10t/24)))
+
+write.csv(top10t,paste0(output_fol,"top",X,"_fast_maxramp_hours.csv"))
+write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_fast_maxramp_days.csv"))
+
+# find top 10 hours for marginal cost across scenarios ####
+X =70
+top10ind = which(rank(prod_margprice$margprice) >= nrow(prod_margprice)-X)
+top10t = prod_margprice$t[top10ind]
+unique(floor(top10t/24))
+length(unique(floor(top10t/24)))
+prod_margprice$margprice[top10ind]
+top10t
+
+write.csv(top10t,paste0(output_fol,"top",X,"_maxmarginalprice_hours.csv"))
+write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_maxmarginalprice_days.csv"))
+
+# find top X hours for max first stage capacity ####
+X = 60
+top10ind = which(rank(cmtcap$allcmtcap) >= nrow(cmtcap)-X)
+top10t = cmtcap$t[top10ind]
+cmtcap$allcmtcap[top10ind]
+top10t
+unique(floor(top10t/24))
+length(unique(floor(top10t/24)))
+
+write.csv(top10t,paste0(output_fol,"top",X,"_slowcmt_hours.csv"))
+write.csv(unique(floor(top10t/24)),paste0(output_fol,"top",X,"_slowcmt_days.csv"))
+
+#### After combining results from above ####
+keydays = read.csv(paste0(instance_in_fol,"keydays2.csv"),header=F)[[1]]
+keydays = keydays * 24
+
+
+firsthr = rep(0,length(keydays))
+lasthr = rep(0,length(keydays))
+lastperiodhr = rep(0,length(keydays))
+for(i in 1:length(keydays)){
+  firsthr[i] = keydays[i]-12 # start run <=12h before key day
+  lasthr[i] = keydays[i]+36 # end run >=12h after key day
+  
+  lastperiodhr[i] = keydays[i] + 4.5*24 # runs are 5 d long
+}
+lastwrittenperiod = 0
+for(i in 1:length(keydays)){
+  if(i==1){ 
+    #write a new one
+    periods = c(firsthr[i]:lastperiodhr[i])
+    write.table(periods,col.names=F,sep=",",row.names=F, file = paste0(instance_in_fol,"periods_",i,"_",firsthr[i],"_",lastperiodhr[i],".csv"))
+    lastwrittenperiod = lastperiodhr[i]
+  } else if(lasthr[i] > lastwrittenperiod){
+    #write a new one
+    periods = c(firsthr[i]:lastperiodhr[i])
+    write.table(periods,col.names=F,sep=",",row.names=F, file = paste0(instance_in_fol,"periods_",i,"_",firsthr[i],"_",lastperiodhr[i],".csv"))
+    lastwrittenperiod = lastperiodhr[i]
+  } 
+}

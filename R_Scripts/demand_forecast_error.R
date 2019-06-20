@@ -244,7 +244,7 @@ ggplot(stats, aes(x=hour, y = mean)) + geom_line() + # wow this is super useful
 ggsave(filename = paste0(plots_dir,"mean_demand_hour_wday.png"))
 
 #########################
-# Create distribution stats for day/night by season
+# Create distribution stats for day/night by season ####
 # Try to match mean, sd.
 
 

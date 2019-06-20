@@ -1,0 +1,462 @@
+# combine_run_results.R
+# reads in output from model (via loadTimeseriesData() in mergeTimeseriesData.R)
+# extracts key outputs, makes a few graphs, and saves key numbers in a csv
+# march 2019
+# Patricia levi
+
+# load model data
+library(tidyverse)
+library(viridis)
+library(data.table)
+
+SHRLK = TRUE
+
+## FILE STRUCTURE ##
+if(SHRLK){
+  baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
+  outputFolBase  = "outputs/"
+  inputFol = "inputs/"
+} else{
+  baseFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
+  outputFolBase = "Data/julia_output/forIAEE_1Pmin/"
+  inputFol = "Data/julia_input/"
+}
+  
+
+## source files ##
+source(paste0(baseFol,"/code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
+source(paste0(baseFol,"/code/R_Scripts/consolidatedAnalysisFns.R"))
+
+
+### PARAMS ####----##
+inputfolID = "5d_keyDays"
+runID = "avail2_keyDays" #"hour1" #"avail2"
+runDate = "2019-03-17" #this might differ across runs! need to consolidate
+overlaplength = 24
+nperiods = 22
+graphs = FALSE
+##----##----##----##
+
+combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, graphs = T, 
+                              base_fol = baseFol, 
+                              output_fol_base = outputFolBase ,
+                              input_fol = inputFol,
+                              SHRLOK = SHRLK){  
+  
+  outputID = paste0(runID,"_",runDate)
+  instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
+  output_fol = paste0(base_fol,output_fol_base,outputID,"/")
+  default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
+  
+  # get input parameters
+  if(!SHRLOK){
+    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+  }else{
+    inputs_file =  paste0(base_fol,"/code/inputs_ercot.csv")
+  }
+  allinputs = read_csv(inputs_file)
+  params = allinputs[,c("input_name",runID)]
+  params = spread(params, key = input_name, value = runID)
+  
+  # load gendat - based on name in inputs_file
+  gendat = read_csv(paste0(default_in_fol,params$genFile))
+  # set VCost of DR to match inputs_file
+  if(as.logical(params$dr_override)){
+    drind = which(str_detect(gendat$plantUnique,"DR-"))
+    gendat$VCost[drind] = as.numeric(params$dr_varcost)
+    print(paste0("Reset VCost for ",length(drind)," DR plants"))
+  }
+  
+  
+  #---------------------------------
+  ### find max first-stage committed capacity #####
+  #---------------------------------
+  
+  # load slow commitment 
+  slowcomt = loadTimeseriesData(output_fol,"slow_commitment", overlaplength,1)
+  
+  # write missing periods
+  theseperiods = unique(slowcomt$nperiod)
+  print("completed periods:")
+  print(theseperiods)
+  print(paste("number of completed periods is", length(theseperiods)))
+  
+  arrayind = read_csv(paste0(instance_in_fol,"orderoffiles.csv"))
+    # periodinfo = t(array(unlist(strsplit(arrayind$filename,"_")),dim=c(4,nrow(arrayind))))
+    # arrayind$periodnum = periodinfo[,2]
+    # write_csv(arrayind,paste0(instance_in_fol,"orderoffiles.csv"))
+  
+  full = as.numeric(arrayind$periodnum)
+  missingnum = full[which(!(full %in% theseperiods))]
+  print("missing periods:")
+  print(missingnum)
+  
+  whichmissing = arrayind$periodnum %in% missingnum
+  outarray = matrix(arrayind$arraynum[whichmissing],nrow=1)
+  if(sum(whichmissing)>0){
+    print("missing array numbers:")
+    print(outarray)
+    write.csv(outarray,paste0(output_fol,"missing_periods_arraynum_slowcommt.csv"),row.names = F)
+    stop("missing periods!")
+  }
+  #
+    
+  
+  # initialize summary output file
+  write("output_type, output_value",file = paste0(output_fol,"summary_stats",runID,".csv"))
+  
+  
+  # match comt decision with capacity
+  # gather gen names
+  # merge with gendat
+  cmtcap = slowcomt %>%
+    gather(key = "generator", value = "cmt", -t) %>%
+    merge(gendat[,c("Capacity","PMin","plantUnique")], by.x = "generator", by.y = "plantUnique") %>%
+    mutate(capComt = cmt*Capacity) %>%
+    group_by(t) %>%
+    summarise(allcmtcap = sum(capComt))
+  
+  if(graphs){
+    ggplot(cmtcap,aes(x=allcmtcap/1000)) + geom_histogram() +
+    ggtitle("Distribution of slow capacity committed") + labs(x = "GW committed") +
+    ggsave(paste0(output_fol,"hist_slow_commit_",runID,".png"),width = 4, height = 5)
+  }
+  xx =summary(cmtcap$allcmtcap)
+  write(paste0("Min slow commit GW incl slow DR,",xx[[1]],"\n ","Max slow commit GW incl slow DR,",xx[[6]],"\n"),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  
+  rm(slowcomt) #for memory management
+  #---------------------------------
+  ### find max up and down ramp rates of system ####
+  
+  
+  # load production, startup data
+  if(!file.exists(paste0(output_fol,"prod.csv"))){
+    print("Loading fast production data")
+    fastprod = loadTimeseriesData(output_fol, "fast_production", overlaplength,2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
+    print("Loading slow production data")
+    slowprod = loadTimeseriesData(output_fol, "slow_production", overlaplength,2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
+    slowprod$speed = "slow"
+    fastprod$speed = "fast"
+    prod = rbind(slowprod, fastprod)
+    names(prod)[names(prod) == 'value'] <- 'MWout'
+    rm(fastprod, slowprod)
+    # write_csv(prod, paste0(output_fol,"prod.csv")) # cannot turn off scientific notation in write_csv
+    prod$prob = 1/25
+    
+    write.csv(prod, paste0(output_fol,"prod.csv"))
+  } else {
+    print("Loading prod.csv")
+    prod = read_csv(file = paste0(output_fol,"prod.csv"))
+    prod$prob = 1/25
+    
+  }
+  
+  # differentiate by slow ramp and total ramp
+  prodramp= prod %>%
+    group_by(scenario,speed,t) %>%
+    summarise(MWtot = sum(MWout)) %>%
+    group_by(scenario,speed) %>%
+    mutate(ramp = MWtot - lag(MWtot, default=0))
+  
+  # prodrampsummary_byscen = prodramp%>%
+  #   group_by(scenario,speed) %>%
+  #   summarise(maxramp = max(ramp),
+  #             minramp = min(ramp))
+  
+  prodrampsummary_all = prodramp%>%
+    group_by(speed) %>%
+    summarise(maxramp = max(ramp),
+              minramp = min(ramp))
+  
+  # remove DR from prod & find ramp
+  prodRest = prod %>%
+    filter(GEN_IND != "DR-1")
+  
+  prodramp= prodRest %>%
+    group_by(scenario,speed,t) %>%
+    summarise(MWtot = sum(MWout)) %>%
+    group_by(scenario,speed) %>%
+    mutate(ramp = MWtot - lag(MWtot, default=0))
+  
+  # prodrampsummary_byscen = prodramp%>%
+  #   group_by(scenario,speed) %>%
+  #   summarise(maxramp = max(ramp),
+  #             minramp = min(ramp))
+  
+  prodrampsummary_allDR = prodramp%>%
+    group_by(speed) %>%
+    summarise(maxramp = max(ramp),
+              minramp = min(ramp))
+  prodrampsummary_all
+  prodrampsummary_allDR
+  write(paste0("max fast ramp,",prodrampsummary_all$maxramp[1],"\n ",
+               "max fast ramp DR removed,",prodrampsummary_allDR$maxramp[1],"\n",
+               "min fast ramp,",prodrampsummary_all$minramp[1],"\n",
+               "min fast ramp DR removed,",prodrampsummary_allDR$minramp[1],"\n",
+               "max slow ramp,",prodrampsummary_all$maxramp[2],"\n",
+               "max slow ramp DR removed,",prodrampsummary_allDR$maxramp[2],"\n",
+               "min slow ramp,",prodrampsummary_all$minramp[2],"\n",
+               "min slow ramp DR removed,",prodrampsummary_allDR$minramp[2],"\n"),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  
+  
+  
+  
+  # visualize ramp
+  # ggplot(prodramp,aes(x=ramp)) + geom_histogram()
+  
+  # visualize daily max ramp
+  prodramp$day = floor(prodramp$t/24)
+  prodrampday = prodramp %>%
+    group_by(day,scenario) %>%
+    summarise(daymaxramp = max(ramp),
+              dayminramp = min(ramp))
+  #TODO: summarise prodramp by combining speeds first - this currently pits fast and slow against each other
+  
+  quants = quantile(prodrampday$daymaxramp[prodrampday$daymaxramp >0], probs = c(0.5,0.9,0.95,0.99,0.995,1), na.rm=T)
+  write(paste0("Ramp quantiles DR excluded: \n",
+               "50%,",quants[1],"\n",
+               "90%,",quants[2],"\n ",
+               "95%,",quants[3],"\n",
+               "99%,",quants[4],"\n",
+               "99.5%,",quants[5],"\n",
+               "100%,",quants[6],"\n",
+               "stdev",sd(prodrampday$daymaxramp[prodrampday$daymaxramp >0]),"\n"),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  
+  
+  # ggplot(prodrampday,aes(x=daymaxramp, fill=scenario)) + geom_histogram() + 
+  #   scale_fill_viridis(discrete=T) + theme_bw() 
+  # ggplot(prodrampday,aes(x=dayminramp, fill=scenario)) + geom_histogram() + 
+  #   scale_fill_viridis(discrete=T) + theme_bw() 
+  # 
+  # # make same plots including DR... OR MAKE A PLOT OF DR RAMPS
+  # prodDR = prod1 %>%
+  #   filter(GEN_IND == "DR-1")
+  # prodramp= prodDR %>%
+  #   group_by(scenario,speed,t) %>%
+  #   summarise(MWtot = sum(MWout)) %>%
+  #   group_by(scenario,speed) %>%
+  #   mutate(ramp = MWtot - lag(MWtot, default=0))
+  # prodramp$day = floor(prodramp$t/24)
+  # prodrampday = prodramp %>%
+  #   group_by(day,scenario) %>%
+  #   summarise(daymaxramp = max(ramp),
+  #             dayminramp = min(ramp))
+  # 
+  # ggplot(prodrampday[prodrampday$daymaxramp >0,],aes(x=daymaxramp)) + geom_histogram() + 
+  #   scale_fill_viridis(discrete=T) + theme_bw() +
+  #   ggtitle("DR ramps only") + 
+  #   facet_wrap(~scenario)
+  # 
+  # ggplot(prodrampday[prodrampday$dayminramp >0,],aes(x=dayminramp, fill=scenario)) + geom_histogram() + 
+  #   scale_fill_viridis(discrete=T) + theme_bw() +
+  #   ggtitle("DR ramps only")+ 
+  #   facet_wrap(~scenario)
+  
+  
+  
+  #---------------------------------
+  ### Find marginal cost statistics, graph ####
+  
+  ## plot marginal price ##
+  prod2 = prod %>%
+    merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel")], by.x = "GEN_IND", by.y = "plantUnique") %>%
+    filter(MWout > 0) 
+  prod_margprice = prod2 %>%
+    group_by(t,scenario) %>%
+    summarise(margprice = max(VCost),
+              marggen = GEN_IND[which.max(VCost)],
+              marggencap = Capacity[which.max(VCost)],
+              marggenspd = speed[which.max(VCost)])
+  
+  if(graphs){
+  ggplot(prod_margprice, aes(x=t, y = margprice, color = scenario)) + 
+    geom_line(aes(color = scenario)) + ggtitle("marginal price across scenarios") +
+    scale_color_viridis(discrete=T) + theme_bw() +
+    ggsave(filename = paste0(output_fol,"marginal_price_",runID,".png"), width = 7, height = 5)
+  ggplot(prod_margprice,aes(x=margprice, fill=scenario)) + geom_histogram() + 
+    scale_fill_viridis(discrete=T) + theme_bw() +
+    ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)
+  }
+  mcostsummary = summary(prod_margprice$margprice)
+  write(paste0("max marginal price,",mcostsummary[[6]],"\n ",
+               "min marginal price,",mcostsummary[[1]],"\n",
+               "median marginal price,",mcostsummary[[3]],"\n"),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  
+  #---------------------------------
+  ## consolidated data of generation source ####
+  fuelBreakdown(prod2,paste0(base_fol,output_fol_base,"plots/"),runID)
+  paste0(base_fol,output_fol_base,"plots/")
+  #---------------------------------
+  #### collect cost information ####
+  
+  # need to infer costs from production, startup info
+  # and weight scenarios to find expected cost
+  
+  #-------------------
+  ## startup costs ##
+  # differentiate by 1st stage (slow) and expected 2nd stage (fast)
+  
+  # load slowstartup to identify slow generators
+  slowstartup = loadTimeseriesData(output_fol,"slow_startup",overlaplength,1)
+  slowstartup = slowstartup %>%
+    gather(key = "generator", value = "start", -t)
+  
+  slowgens = unique(slowstartup$generator)
+  speedslow = data_frame(GEN_IND = slowgens, speed = "slow")
+  
+  # load and manipulate all startup data
+  if(!file.exists(paste0(output_fol,"v_startup_all.csv"))){
+    allstartup = loadTimeseriesData(output_fol,"v_startup",overlaplength,
+                                    2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
+    allstartup$prob=1/25
+    names(allstartup)[names(allstartup) == 'value'] <- 'startup'
+  
+    write.csv(allstartup, paste0(output_fol,"v_startup_all.csv"))
+  } else {
+    print("Loading v_startup_all.csv")
+    allstartup = read_csv(file = paste0(output_fol,"v_startup_all.csv"))
+  }
+  
+  # allstartup = allstartup %>%
+    # merge(speedslow, by = "GEN_IND", all.x=T)
+  allstartup = merge(as.data.table(allstartup), as.data.table(speedslow),by = "GEN_IND", all.x=T)
+  allstartup$speed[is.na(allstartup$speed)] = "fast"
+  fastsel = which(allstartup$speed == "fast")
+  
+  # merge with gen information
+  # allstartup = merge(allstartup, gendat[,c("plantUnique","StartCost")], all.x=T, by.x = "GEN_IND", by.y = "plantUnique")
+  allstartup = merge(as.data.table(allstartup), as.data.table(gendat[,c("plantUnique","StartCost")]), all.x=T, by.x = "GEN_IND", by.y = "plantUnique")
+  
+  # calculate expected cost
+  # when calculating costs, make sure negative startup is not negative cost
+  allstartup$startup[allstartup$startup < 0]=0
+  allstartup$expectedcost = 0
+  allstartup$expectedcost = allstartup$startup * allstartup$prob * allstartup$StartCost
+  
+  # sum across scenarios
+  startcost = allstartup %>%
+    group_by(t, speed) %>%
+    summarise(ecost = sum(expectedcost))
+  
+  # plot ##
+  startcostplot = startcost %>%
+    filter(ecost >0)
+  if(graphs){
+  # regular plot
+  ggplot(startcostplot, aes(x=t, y=ecost, color = speed)) + geom_point() +
+    theme_bw() +
+    ggsave(filename = paste0(output_fol,"startupcosts_",runID,".png"), width = 7, height = 5)
+  
+  # cropped reg plot
+  ggplot(startcost, aes(x=t, y=ecost, color = speed)) + geom_line() + 
+    theme_bw() +
+    coord_cartesian(ylim = c(1,5e5))+
+    ggsave(filename = paste0(output_fol,"startupcosts_zoom_",runID,".png"), width = 7, height = 5)
+  
+  # log plot
+  ggplot(startcostplot, aes(x=t, y=ecost, color = speed)) + geom_point() +
+    scale_y_continuous(trans='log10') +
+    coord_cartesian(ylim = c(1,1e7)) +
+    theme_bw()+
+    ggsave(filename = paste0(output_fol,"startupcosts_log_",runID,".png"), width = 7, height = 5)
+  ## end plots ##
+  }
+  
+  # sum across time
+  startcosttot = startcost %>%
+    group_by(speed) %>%
+    summarise(ecost = sum(ecost)) %>%
+    spread(key=speed,value=ecost)
+  # write to summary stats
+  write(paste0("startup costs slow gens,",startcosttot$slow[1],"\n ",
+               "expected fast startup costs,",startcosttot$fast[1],"\n"),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  
+  #-------------------
+  ## production costs ##
+  # differentiate by 1st stage and expected 2nd stage
+  
+  # prob already loaded and differentiated by speed
+  # special case - check DR separately
+  prod$speed[str_detect(prod$GEN_IND,"DR-")] = "DR"
+  
+  # associate generator production cost
+  prod = merge(as.data.table(prod), as.data.table(gendat[,c("plantUnique","VCost","PLC2ERTA")]), all.x=T,by.x="GEN_IND",by.y="plantUnique")
+  prod$prob = 1/25
+  
+  prodcost = prod %>%
+    mutate(expectedcost = MWout * VCost * prob) %>% # double check units
+    group_by(speed,t) %>%
+    summarise(ecost = sum(expectedcost))
+  
+  # plot ##
+  prodcostplot = prodcost %>%
+    filter(ecost >0)
+  if(graphs){
+  # regular plot
+  ggplot(prodcostplot, aes(x=t, y=ecost, color = speed)) + geom_line() +
+    theme_bw() +
+    ggsave(filename = paste0(output_fol,"productioncosts_",runID,".png"), width = 7, height = 5)
+  }
+  
+  # sum across time
+  prodcosttot = prodcost %>%
+    group_by(speed) %>%
+    summarise(ecost = sum(ecost)) %>%
+    spread(key=speed,value=ecost)
+  # write to summary stats
+  write(paste0("prod costs slow gens,",prodcosttot$slow[1],"\n ",
+               "expected fast prod costs,",prodcosttot$fast[1],"\n",
+               "expected DR prod costs,",prodcosttot$DR[1],"\n"),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  
+  #-------------------
+  ## combined costs ##
+  names(prodcostplot) = c("speed","t","prod")
+  names(startcostplot) = c("t","speed","startup")
+  allcosts = merge(prodcostplot,startcostplot, by = c("t","speed"), all=T)
+  allcosts = gather(allcosts, key = "cost_type", value = "cost", prod, startup)
+  
+  allcosts_byspeed = allcosts %>%
+    group_by(cost_type) 
+  
+  ## plot
+  if(graphs){
+  ggplot(allcosts, aes(x=t,y=cost,color=speed)) + geom_line() +
+    facet_wrap(~cost_type, nrow=2, scales = "fixed")+
+    theme_bw() +
+    ggsave(filename = paste0(output_fol,"allcosts_",runID,".png"), width = 10, height = 8)
+  }
+  # sum across time
+  allcosttot = allcosts %>%
+    group_by(speed) %>%
+    summarise(ecost = sum(cost,na.rm=T)) %>%
+    spread(key=speed,value=ecost)
+  
+  # count hours DR is on
+  dron = prod$MWout > 1e-5 & prod$speed =="DR"
+    
+  # write to summary stats
+  write(paste0("all costs slow gens,",allcosttot$slow[1],"\n",
+               "expected fast all costs,",allcosttot$fast[1],"\n",
+               "expected DR all costs,",allcosttot$DR[1],"\n , \n",
+               "Hours DR is on,", sum(dron)),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+}
+
+#---------------------------------
+## [later] find CO2 emissions ####
+
+
+# already merged CO2 emissions data into prod array above
+
+
+#---------------------------------
+## save a csv of key results ####
+
+
+# write to summary file the number of hours in simulation
