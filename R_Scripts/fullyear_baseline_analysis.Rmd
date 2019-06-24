@@ -1,0 +1,128 @@
+---
+title: "Model validation with full-year run results"
+output: html_notebook
+---
+
+<!-- This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code.  -->
+<!-- Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*.  -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*. -->
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).  -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*. -->
+<!-- The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed. -->
+
+```{r message=FALSE, warning=FALSE, include=FALSE, cache=TRUE}
+library(tidyverse)
+outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/"
+# test=read_csv(file = paste0(outputfol,"summary_statsbase_noDRfullyear.csv"))
+# print(test)
+prod = read_csv(file = paste0(outputfol,"prod.csv"))
+```
+#Production levels by generator type
+Sum production by generator and average by scenario to find production levels by generator type.
+```{r eval=FALSE, include=FALSE}
+# DOESNT WORK
+# sum production data by generator & scenaro
+prod_bygen = prod %>%
+  group_by(GEN_IND, scenario) %>%
+  summarise(totgen = sum(MWout)) %>%
+  mutate(gen_type = str_split(GEN_IND,"-",simplify=T)[,1]) %>%
+  group_by(gen_type) %>%
+  summarise(mean_totgen = mean(totgen))
+# dim(prod_bygen)
+# print(prod_bygen)
+allgen = sum(prod_bygen$mean_totgen)
+prod_bygen$pct_prod = round(prod_bygen$mean_totgen/allgen,6)
+```
+
+```{r eval=FALSE, include=FALSE}
+#DOESNT WORK
+# group gas plants together
+prod_gengroup = prod_bygen %>%
+  mutate(gen_group = str_split(gen_type,"_",simplify=T)[,1]) %>%
+  group_by(gen_group) %>%
+  summarise(mean_totgen_group = sum(mean_totgen),
+            pct_prod = 100*mean_totgen_group/sum(prod_bygen$mean_totgen))
+# print(prod_gengroup[,c(1,3)])
+```
+```{r eval=FALSE, include=FALSE}
+#DOESNT WORK
+ggplot(prod_gengroup,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
+  theme_bw() + 
+  scale_y_continuous(labels=scales::percent) +
+  labs(x = "Generation Type", y = "Percent of energy supplied", title = "WRONG: Generation Breakdown: ERCOT 2016, no DR") +
+  geom_text(aes(label = round(pct_prod/100,3)), vjust = -0.5)
+```
+
+<!-- Nuclear generation is off the charts! why is this?? Is scenario aggregation to blame? Just pick one... -->
+
+```{r}
+prod_o1 = prod %>%
+  filter(scenario == "o1") 
+
+prod_o1gen = prod_o1 %>%
+  mutate(gen_group = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
+  group_by(gen_group) %>%
+  summarise(totgen = sum(MWout),
+            pct_prod = 100*totgen/sum(prod_o1$MWout))
+# print(prod_o1gen)
+```
+```{r echo=FALSE}
+ggplot(prod_o1gen,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
+  theme_bw() + 
+  scale_y_continuous(labels=scales::percent) +
+  labs(x = "Generation Type", y = "Percent of energy supplied", title = "Generation Breakdown: ERCOT 2016, no DR, scenario o1") +
+  geom_text(aes(label = round(pct_prod/100,5)), vjust = -0.4)
+```
+<!-- Ah, that looks better. Why was the other version so different? -->
+Checking how results change across scenarios
+
+```{r}
+prod_o20 = prod %>%
+  filter(scenario == "o20") 
+
+prod_o20gen = prod_o20 %>%
+  mutate(gen_group = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
+  group_by(gen_group) %>%
+  summarise(totgen = sum(MWout),
+            pct_prod = 100*totgen/sum(prod_o1$MWout))
+# print(prod_o20gen)
+```
+```{r echo=FALSE}
+ggplot(prod_o20gen,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
+  theme_bw() + 
+  scale_y_continuous(labels=scales::percent) +
+  labs(x = "Generation Type", y = "Percent of energy supplied", title = "Generation Breakdown: ERCOT 2016, no DR, scenario o20") +
+  geom_text(aes(label = round(pct_prod/100,5)), vjust = -0.4)
+```
+
+
+full-scenario aggregation
+```{r}
+prod_gen = prod %>% 
+  mutate(gen_group = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
+  group_by(gen_group,scenario) %>%
+  summarise(totgen = sum(MWout))
+
+prod_genmean = prod_gen %>%
+  group_by(gen_group) %>%
+  summarise(meangen = mean(totgen))
+allgen = sum(prod_genmean$meangen)
+prod_genmean$pct_prod = 100*prod_genmean$meangen/allgen
+
+# print(prod_genmean)
+```
+
+Ah that checks out. Better. wonder what was up before...
+```{r echo=FALSE}
+ggplot(prod_genmean,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
+  theme_bw() + 
+  scale_y_continuous(labels=scales::percent) +
+  labs(x = "Generation Type", y = "Percent of energy supplied", title = "Generation Breakdown: ERCOT 2016, no DR") +
+  geom_text(aes(label = round(pct_prod/100,4)), vjust = -0.4)
+```
+
+Compared to Nov 2018 EIA data (see Data -> primary documents -> Texas_Net_Electricity_Generation_by_Source_Nov.2018.csv), that's less gas(6pp), more coal (3pp), more nuclear(3pp), more hydro(1pp), and a bit less other renewables (1pp). The first three fit with the observation that prices don't seem to get very high in the model, and there seems to be a bit of a generation overage.
+That said, this is a **model** eletricity system, not meant to forecast what will happen in TX. So the important thing is that it gets the **dynamics** right...
+
+# Extract marginal prices, compare to historical prices
+Use `combine_run_results.R` for this, download historical data from ERCOT (see note in evernote)

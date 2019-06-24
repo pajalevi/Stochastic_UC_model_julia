@@ -2,3 +2,5 @@
 *.jld2
 *.RData
 *.Rhistory
+*.nb.html
+*.DS_store
