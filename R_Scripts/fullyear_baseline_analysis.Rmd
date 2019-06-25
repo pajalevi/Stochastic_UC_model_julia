@@ -12,9 +12,15 @@ output: html_notebook
 
 ```{r message=FALSE, warning=FALSE, include=FALSE, cache=TRUE}
 library(tidyverse)
+base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
 outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/"
+input_fol = "Data/julia_input/"
+default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
+runID = "base_noDRfullyear"
 # test=read_csv(file = paste0(outputfol,"summary_statsbase_noDRfullyear.csv"))
 # print(test)
+```
+```{r}
 prod = read_csv(file = paste0(outputfol,"prod.csv"))
 ```
 #Production levels by generator type
@@ -125,4 +131,54 @@ Compared to Nov 2018 EIA data (see Data -> primary documents -> Texas_Net_Electr
 That said, this is a **model** eletricity system, not meant to forecast what will happen in TX. So the important thing is that it gets the **dynamics** right...
 
 # Extract marginal prices, compare to historical prices
-Use `combine_run_results.R` for this, download historical data from ERCOT (see note in evernote)
+copy code from `combine_run_results.R` for this starting `line 261`, download historical data from ERCOT (see note in evernote)
+```{r include=FALSE}
+# read in gendat 
+  inputfile = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+  allinputs = read_csv(inputfile)
+  params = allinputs[,c("input_name",runID)]
+  params = spread(params, key = input_name, value = runID)
+  
+  # load gendat - based on name in inputs_file
+  gendat = read_csv(paste0(default_in_fol,params$genFile))
+  # set VCost of DR to match inputs_file
+  if(as.logical(params$dr_override)){
+    drind = which(str_detect(gendat$plantUnique,"DR-"))
+    gendat$VCost[drind] = as.numeric(params$dr_varcost)
+    print(paste0("Reset VCost for ",length(drind)," DR plants"))
+  }
+
+# TODO
+
+# combine it with prod
+prod2 = prod %>%
+    merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel")], by.x = "GEN_IND", by.y = "plantUnique") %>%
+    filter(MWout > 0) 
+```
+
+```{r include=FALSE}
+# identify marginal cost in each hour
+prod_margprice = prod2 %>%
+  group_by(t,scenario) %>%
+  summarise(margprice = max(VCost),
+            marggen = GEN_IND[which.max(VCost)],
+            marggencap = Capacity[which.max(VCost)],
+            marggenspd = speed[which.max(VCost)])
+```
+
+Marginal cost over time:
+```{r include=FALSE}
+# plot marginal cost overview
+  ggplot(prod_margprice, aes(x=t, y = margprice, color = scenario)) + 
+    geom_line(aes(color = scenario)) + ggtitle("marginal price across scenarios") +
+    scale_color_viridis(discrete=T) + theme_bw() +
+    ggsave(filename = paste0(output_fol,"marginal_price_",runID,".png"), width = 7, height = 5)
+
+```
+
+```{r include = FALSE}
+  ggplot(prod_margprice,aes(x=margprice, fill=scenario)) + geom_histogram() + 
+    scale_fill_viridis(discrete=T) + theme_bw() +
+    ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)
+```
+
