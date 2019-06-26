@@ -11,7 +11,10 @@ output: html_notebook
 <!-- The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed. -->
 
 ```{r message=FALSE, warning=FALSE, include=FALSE, cache=TRUE}
+knitr::opts_chunk$set(echo = FALSE) 
 library(tidyverse)
+library(viridis)
+library(lubridate)
 base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
 outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/"
 input_fol = "Data/julia_input/"
@@ -20,7 +23,7 @@ runID = "base_noDRfullyear"
 # test=read_csv(file = paste0(outputfol,"summary_statsbase_noDRfullyear.csv"))
 # print(test)
 ```
-```{r}
+```{r include=FALSE}
 prod = read_csv(file = paste0(outputfol,"prod.csv"))
 ```
 #Production levels by generator type
@@ -127,7 +130,7 @@ ggplot(prod_genmean,aes(y=pct_prod/100,x=gen_group)) + geom_col() +
   geom_text(aes(label = round(pct_prod/100,4)), vjust = -0.4)
 ```
 
-Compared to Nov 2018 EIA data (see Data -> primary documents -> Texas_Net_Electricity_Generation_by_Source_Nov.2018.csv), that's less gas(6pp), more coal (3pp), more nuclear(3pp), more hydro(1pp), and a bit less other renewables (1pp). The first three fit with the observation that prices don't seem to get very high in the model, and there seems to be a bit of a generation overage.
+Compared to Nov 2018 EIA data (see Data -> primary documents -> Texas_Net_Electricity_Generation_by_Source_Nov.2018.csv), that's **less gas(6pp), more coal (3pp), more nuclear(3pp), more hydro(1pp), and a bit less other renewables (1pp).** The first three fit with the observation that prices don't seem to get very high in the model, and there seems to be a bit of a generation overage.
 That said, this is a **model** eletricity system, not meant to forecast what will happen in TX. So the important thing is that it gets the **dynamics** right...
 
 # Extract marginal prices, compare to historical prices
@@ -150,15 +153,15 @@ copy code from `combine_run_results.R` for this starting `line 261`, download hi
 
 # TODO
 
-# combine it with prod
-prod2 = prod %>%
+# combine it with prod - just scenario 1 for computational size
+prod2_o1 = prod_o1 %>%
     merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel")], by.x = "GEN_IND", by.y = "plantUnique") %>%
     filter(MWout > 0) 
 ```
 
 ```{r include=FALSE}
 # identify marginal cost in each hour
-prod_margprice = prod2 %>%
+prod_margprice = prod2_o1 %>%
   group_by(t,scenario) %>%
   summarise(margprice = max(VCost),
             marggen = GEN_IND[which.max(VCost)],
@@ -166,19 +169,159 @@ prod_margprice = prod2 %>%
             marggenspd = speed[which.max(VCost)])
 ```
 
-Marginal cost over time:
-```{r include=FALSE}
+Modeled marginal cost:
+```{r echo=FALSE}
+  ggplot(prod_margprice,aes(x=margprice, fill=marggenspd)) + geom_histogram(binwidth = 3) + 
+    scale_fill_viridis(discrete=T) + 
+    theme_bw() +
+    labs(x = "Marginal Price", y = "Number of hours", title = "Distribution of marginal price by generator speed")
+    # ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)
+```
+```{r echo=FALSE}
+ggplot(histprice,aes(x=Price)) + geom_histogram(binwidth = 3)+
+  scale_x_continuous(limits = c(0,100)) + facet_wrap(~Zone) +
+  labs(title = "distribution of historical prices across texas zones", x = "price ($/MWh)", y = "hours") 
+```
+```{r echo=FALSE}
 # plot marginal cost overview
-  ggplot(prod_margprice, aes(x=t, y = margprice, color = scenario)) + 
-    geom_line(aes(color = scenario)) + ggtitle("marginal price across scenarios") +
-    scale_color_viridis(discrete=T) + theme_bw() +
-    ggsave(filename = paste0(output_fol,"marginal_price_",runID,".png"), width = 7, height = 5)
+  ggplot(prod_margprice, aes(x=t, y = margprice, color = marggenspd)) + 
+    geom_point() + 
+    geom_line(aes(color = NA))+
+    # scale_color_viridis(discrete=T) + 
+    theme_bw() +
+    labs(y = "Marginal Price", x = "hour of the year", title = "marginal price and generator speed")
+   # ggsave(filename = paste0(output_fol,"marginal_price_",runID,".png"), width = 7, height = 5)
 
 ```
 
-```{r include = FALSE}
-  ggplot(prod_margprice,aes(x=margprice, fill=scenario)) + geom_histogram() + 
-    scale_fill_viridis(discrete=T) + theme_bw() +
-    ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)
+```{r echo=FALSE, message=FALSE}
+# Load historical energy price
+# downloaded from http://www.energyonline.com/Data/GenericData.aspx?DataId=4
+histprice = read_csv(file = paste0(base_fol,"Data/primary documents/20160101-20161231 ERCOT Real-time Price.csv"))
+                     # col_types = cols(Date = col_datetime(), Price = col_double(), Zone = col_character()))
+histprice$Date = mdy_hms(histprice$Date)
+ggplot(histprice,aes(x=Date, y = Price, color = Zone)) + geom_line() +
+  scale_color_viridis(discrete=T) + theme_bw() +
+  scale_y_continuous(limits=c(0,100)) +
+  labs(title = "2016 ERCOT energy prices ($/MWh)")
 ```
 
+Stacked area chart of generation in model during peak days
+
+```{r include=FALSE}
+#extract plot DF: cols should be date, coal_gen, oil gen, nuclear gen... etc by gen type
+plotdf = prod_o1 %>%
+  mutate(gen_type = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
+  group_by(gen_type,t) %>%
+  summarise(totgen =sum(MWout)) %>%
+  spread(key = gen_type, value = totgen)
+
+```
+```{r echo=FALSE}
+#plot
+#use geom_area, see "Stacked Area Chart" at http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html
+ggplot(plotdf, aes(x=t)) +
+  geom_area(aes(y=LANDFILL + BIOMASS + WIND + SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Biomass")) +
+  geom_area(aes(y=WIND + SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Wind")) +
+  geom_area(aes(y=SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Solar")) +
+  geom_area(aes(y=GAS + COAL + NUCLEAR + HYDRO, fill = "Gas")) +
+  geom_area(aes(y=COAL + NUCLEAR + HYDRO, fill = "Coal")) +
+  geom_area(aes(y=NUCLEAR + HYDRO, fill = "Nuclear")) +
+  geom_area(aes(y=HYDRO, fill = "Hydro")) +
+  labs(title = "production by generator type", y="MW",x = "hour of year") + 
+  # scale_x_continuous(limits = c(3000,4000)) +
+  scale_fill_manual(name = "",
+                    values = c("Biomass" = "dark green","Wind" = "light blue" ,
+                               "Solar" = "yellow",
+                               "Gas" = "red", "Coal" = "black",
+                               "Nuclear" = "orange", "Hydro" = "blue")) 
+```
+```{r echo=FALSE}
+#plot
+#use geom_area, see "Stacked Area Chart" at http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html
+ggplot(plotdf, aes(x=t)) +
+  geom_area(aes(y=LANDFILL + BIOMASS + WIND + SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Biomass")) +
+  geom_area(aes(y=WIND + SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Wind")) +
+  geom_area(aes(y=SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Solar")) +
+  geom_area(aes(y=GAS + COAL + NUCLEAR + HYDRO, fill = "Gas")) +
+  geom_area(aes(y=COAL + NUCLEAR + HYDRO, fill = "Coal")) +
+  geom_area(aes(y=NUCLEAR + HYDRO, fill = "Nuclear")) +
+  geom_area(aes(y=HYDRO, fill = "Hydro")) +
+  labs(title = "production by generator type: mid summer", y="MW",x = "hour of year") + 
+  scale_x_continuous(limits = c(5017,5130)) +
+  scale_fill_manual(name = "",
+                    values = c("Biomass" = "dark green","Wind" = "light blue" ,
+                               "Solar" = "yellow",
+                               "Gas" = "red", "Coal" = "black",
+                               "Nuclear" = "orange", "Hydro" = "blue")) 
+```
+
+```{r echo=FALSE}
+#plot
+#use geom_area, see "Stacked Area Chart" at http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html
+ggplot(plotdf, aes(x=t)) +
+  geom_area(aes(y=LANDFILL + BIOMASS + WIND + SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Biomass")) +
+  geom_area(aes(y=WIND + SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Wind")) +
+  geom_area(aes(y=SOLAR + GAS + COAL + NUCLEAR + HYDRO, fill = "Solar")) +
+  geom_area(aes(y=GAS + COAL + NUCLEAR + HYDRO, fill = "Gas")) +
+  geom_area(aes(y=COAL + NUCLEAR + HYDRO, fill = "Coal")) +
+  geom_area(aes(y=NUCLEAR + HYDRO, fill = "Nuclear")) +
+  geom_area(aes(y=HYDRO, fill = "Hydro")) +
+  labs(title = "production by generator type: winter", y="MW",x = "hour of year") + 
+  # scale_x_continuous(limits = c(8665,8784)) +
+  scale_x_continuous(limits = c(8551,8670)) +
+  scale_fill_manual(name = "",
+                    values = c("Biomass" = "dark green","Wind" = "light blue" ,
+                               "Solar" = "yellow",
+                               "Gas" = "red", "Coal" = "black",
+                               "Nuclear" = "orange", "Hydro" = "blue")) 
+```
+
+# price stats
+The range of my modeled prices is tiny relative to the actual range...
+How many hours in LZ_HOUSTON, for example, were above 50? how does that compare to my model?
+The number of hours with a price above \$50/MWh in the houston area was `r sum(histprice$Price[histprice$Zone == "LZ_HOUSTON"] > 50)`, while the number of such simulate hours in scenario o1 was `r sum(prod_margprice$margprice[prod_margprice$scenario == "o1"] >50)`. 
+For the number of hours above \$100/MWh is `r sum(histprice$Price[histprice$Zone == "LZ_HOUSTON"] > 100)` and `r sum(prod_margprice$margprice[prod_margprice$scenario == "o1"] >100)` respectively. 
+
+The mean and median of the houston price are:
+mean: `r mean(histprice$Price[histprice$Zone == "LZ_HOUSTON"])` and median: `r median(histprice$Price[histprice$Zone == "LZ_HOUSTON"])`
+The mean and median of the simulated o1 price are:
+mean: `r mean(prod_margprice$margprice[prod_margprice$scenario == "o1"])` and median: `r median(prod_margprice$margprice[prod_margprice$scenario == "o1"])`.
+
+So the *mean* and *median* are higher in my model, but the right tail is much shorter, which we can see from both the # of hours greater than a threshold, and from the difference between mean and median.
+***
+What about the effect of transmission constraints on local prices? to attempt to exclude that, I will look at the *median* price in texas across all zones.
+```{r}
+medprice = histprice %>%
+  group_by(Date) %>%
+  summarise(medprice = median(Price))
+ggplot(medprice,aes(x=Date, y = medprice)) + geom_line() +
+  theme_bw() +
+  scale_y_continuous(limits=c(0,100)) +
+  labs(title = "MEDIAN 2016 ERCOT energy prices ($/MWh)")
+```
+
+```{r}
+ggplot(medprice, aes(x=medprice)) + geom_histogram(binwidth = 3) + 
+  scale_x_continuous(limits = c(0,100)) +
+  theme_bw() + labs(title = "Distribution of historical median price")
+```
+
+# What does historical supply curve look like?
+```{r}
+# find total production by time - approximate with scenario for now
+totdemand = prod_o1 %>%
+  group_by(t) %>%
+  dem = sum(MWout)
+
+# need to create usable date from t so it can be matched... histprice was imported in UTC
+
+```
+
+
+# look at shadow price of supply=demand as saved by model
+What is the format of the dual variable?
+```{r}
+demanddual = read_csv(file = paste0(outputfol,"demanddual.csv"))
+dim(demanddual)
+```
