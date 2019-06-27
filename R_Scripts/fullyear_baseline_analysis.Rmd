@@ -26,6 +26,8 @@ runID = "base_noDRfullyear"
 ```{r include=FALSE}
 prod = read_csv(file = paste0(outputfol,"prod.csv"))
 ```
+**NEXT: recompile production data with the correct overlap between periods...**
+
 #Production levels by generator type
 Sum production by generator and average by scenario to find production levels by generator type.
 ```{r eval=FALSE, include=FALSE}
@@ -199,14 +201,19 @@ ggplot(histprice,aes(x=Price)) + geom_histogram(binwidth = 3)+
 # downloaded from http://www.energyonline.com/Data/GenericData.aspx?DataId=4
 histprice = read_csv(file = paste0(base_fol,"Data/primary documents/20160101-20161231 ERCOT Real-time Price.csv"))
                      # col_types = cols(Date = col_datetime(), Price = col_double(), Zone = col_character()))
-histprice$Date = mdy_hms(histprice$Date)
+histprice$Date = mdy_hms(histprice$Date, tz = "US/Central")
 ggplot(histprice,aes(x=Date, y = Price, color = Zone)) + geom_line() +
   scale_color_viridis(discrete=T) + theme_bw() +
-  scale_y_continuous(limits=c(0,100)) +
   labs(title = "2016 ERCOT energy prices ($/MWh)")
 ```
 
 Stacked area chart of generation in model during peak days
+```{r}
+ggplot(histprice,aes(x=Date, y = Price, color = Zone)) + geom_line() +
+  scale_color_viridis(discrete=T) + theme_bw() +
+  coord_cartesian(ylim=c(0,100)) +
+  labs(title = "Zoom - 2016 ERCOT energy prices ($/MWh)")
+```
 
 ```{r include=FALSE}
 #extract plot DF: cols should be date, coal_gen, oil gen, nuclear gen... etc by gen type
@@ -217,6 +224,22 @@ plotdf = prod_o1 %>%
   spread(key = gen_type, value = totgen)
 
 ```
+```{r}
+medprice = histprice %>%
+  group_by(Date) %>%
+  summarise(medprice = median(Price))
+ggplot(medprice,aes(x=Date, y = medprice)) + geom_line() +
+  theme_bw() +
+  # coord_cartesian(ylim=c(0,100)) +
+  labs(title = "MEDIAN 2016 ERCOT energy prices ($/MWh)")
+```
+```{r}
+ggplot(medprice,aes(x=Date, y = medprice)) + geom_line() +
+  theme_bw() +
+  coord_cartesian(ylim=c(0,100)) +
+  labs(title = "Zoom - MEDIAN 2016 ERCOT energy prices ($/MWh)")
+```
+
 ```{r echo=FALSE}
 #plot
 #use geom_area, see "Stacked Area Chart" at http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html
@@ -236,6 +259,7 @@ ggplot(plotdf, aes(x=t)) +
                                "Gas" = "red", "Coal" = "black",
                                "Nuclear" = "orange", "Hydro" = "blue")) 
 ```
+
 ```{r echo=FALSE}
 #plot
 #use geom_area, see "Stacked Area Chart" at http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html
@@ -291,15 +315,6 @@ mean: `r mean(prod_margprice$margprice[prod_margprice$scenario == "o1"])` and me
 So the *mean* and *median* are higher in my model, but the right tail is much shorter, which we can see from both the # of hours greater than a threshold, and from the difference between mean and median.
 ***
 What about the effect of transmission constraints on local prices? to attempt to exclude that, I will look at the *median* price in texas across all zones.
-```{r}
-medprice = histprice %>%
-  group_by(Date) %>%
-  summarise(medprice = median(Price))
-ggplot(medprice,aes(x=Date, y = medprice)) + geom_line() +
-  theme_bw() +
-  scale_y_continuous(limits=c(0,100)) +
-  labs(title = "MEDIAN 2016 ERCOT energy prices ($/MWh)")
-```
 
 ```{r}
 ggplot(medprice, aes(x=medprice)) + geom_histogram(binwidth = 3) + 
@@ -309,15 +324,32 @@ ggplot(medprice, aes(x=medprice)) + geom_histogram(binwidth = 3) +
 
 # What does historical supply curve look like?
 ```{r}
-# find total production by time - approximate with scenario for now
-totdemand = prod_o1 %>%
-  group_by(t) %>%
-  dem = sum(MWout)
+demand = read_csv(file = paste0(default_in_fol,"ercot_demand_2016.csv"))
+demand$Date = mdy_hm(demand$time_CST, tz="US/Central")
 
-# need to create usable date from t so it can be matched... histprice was imported in UTC
-
+supplycurve = merge(demand, medprice, by="Date")
 ```
 
+```{r}
+# find total production by time - approximate with scenario for now
+# totdemand = prod_o1 %>%
+#   group_by(t) %>%
+#   summarise(dem = sum(MWout))
+# medprice$t = 24*yday(medprice$Date) + hour(medprice$Date) - 23
+# supplycurve = merge(totdemand, medprice, by="t")
+ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Demand", y = "Median Price", title = "Historical demand and median price") +
+  theme_bw()
+```
+Zoom ...
+```{r}
+ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
+  coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Demand", y = "Median Price", title = "Zoom - Historical demand and median price")+
+  theme_bw()
+```
+So based on this, the high prices I'm seeing look almost normal - the trendline doesn't really break $50. 
 
 # look at shadow price of supply=demand as saved by model
 What is the format of the dual variable?

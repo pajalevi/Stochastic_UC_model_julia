@@ -1,0 +1,74 @@
+---
+title: "Historical_ERCOT_production"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(viridis)
+
+base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
+input_fol = "Data/julia_input/"
+default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
+```
+```{r}
+#iterate over all months
+months = c("Jan16","Feb16","Mar16","Apr16","May16","Jun16","Jul16","Aug16","Sep16","Oct16","Nov16","Dec16")
+for(i in 1:12) {
+  month = months[i]
+  fuel_report = read_excel(path = paste0(base_fol,"Data/primary documents/FuelMixReport_PreviousYears/IntGenbyFuel2016.xlsx"),
+                           sheet = month)
+  #create column names
+  hour_names = rep(seq(0,23,1), each=4)
+  hour_names = as.character(c(hour_names[2:length(hour_names)],hour_names[1]))
+  minutes = rep(c("00","15","30","45"), 24)
+  minutes = c(minutes[2:length(minutes)],minutes[1])
+  # time_names = hour_names + minutes
+  time_names =str_c(as.character(hour_names), as.character(minutes), sep=":")
+  column_names = c("Date-Fuel","Total", as.character(time_names))
+  names(fuel_report) = column_names
+  
+  # parse fuel, date
+  fuel_report$Date = str_split(fuel_report$`Date-Fuel`,"_", simplify=T)[,1]
+  fuel_report$Fuel = str_split(fuel_report$`Date-Fuel`,"_", simplify=T)[,2]
+  
+  # gather time
+  fuel_long_i = fuel_report %>%
+    gather(key = "time", value = "MWH",contains(":")) 
+  fuel_long_i$hour = str_split(fuel_long_i$time,":",simplify=T)[,1]
+  
+  if(i==1){fuel_long = fuel_long_i
+  } else {
+    fuel_long = rbind(fuel_long, fuel_long_i)
+  }
+}
+```
+
+```{r}
+fuel_hourly = fuel_long %>%
+  group_by(Fuel,Date,hour) %>%
+  summarise(totMWH = sum(MWH))
+fuel_hourly$datetime = mdy_h(str_c(fuel_hourly$Date,fuel_hourly$hour,sep="_"))
+```
+```{r}
+ggplot(fuel_hourly,aes(x=datetime,y=totMWH,color=Fuel)) + geom_line() +
+  theme_bw() + labs(title = "historical production, ERCOT")
+```
+
+```{r}
+fuel_hourly_hydro = fuel_hourly %>%
+  filter(Fuel == "Hydro")
+ggplot(fuel_hourly_hydro,aes(x=datetime,y=totMWH,color=Fuel)) + geom_line() +
+  theme_bw() + labs(title = paste("historical production, ERCOT",month))
+```
+```{r}
+fuel_hourly_nuclear = fuel_hourly %>%
+  filter(Fuel == "Nuclear")
+ggplot(fuel_hourly_nuclear,aes(x=datetime,y=totMWH,color=Fuel)) + geom_line() +
+  theme_bw() + labs(title = paste("historical production, ERCOT",month))
+
+```
+
