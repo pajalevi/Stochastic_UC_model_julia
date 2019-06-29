@@ -4,3 +4,8 @@
 *.Rhistory
 *.nb.html
 *.DS_store
+*.pdf
+*.rdb
+*.rdx
+*.png
+*fullyear_baseline_analysis_cache*

@@ -1,8 +1,14 @@
 ---
 title: "Model validation with full-year run results"
-output: html_notebook
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
 ---
 
+June 28th, 2019
+Patricia Levi
 <!-- This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code.  -->
 <!-- Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*.  -->
 <!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*. -->
@@ -180,11 +186,6 @@ Modeled marginal cost:
     # ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)
 ```
 ```{r echo=FALSE}
-ggplot(histprice,aes(x=Price)) + geom_histogram(binwidth = 3)+
-  scale_x_continuous(limits = c(0,100)) + facet_wrap(~Zone) +
-  labs(title = "distribution of historical prices across texas zones", x = "price ($/MWh)", y = "hours") 
-```
-```{r echo=FALSE}
 # plot marginal cost overview
   ggplot(prod_margprice, aes(x=t, y = margprice, color = marggenspd)) + 
     geom_point() + 
@@ -205,6 +206,11 @@ histprice$Date = mdy_hms(histprice$Date, tz = "US/Central")
 ggplot(histprice,aes(x=Date, y = Price, color = Zone)) + geom_line() +
   scale_color_viridis(discrete=T) + theme_bw() +
   labs(title = "2016 ERCOT energy prices ($/MWh)")
+```
+```{r echo=FALSE}
+ggplot(histprice,aes(x=Price)) + geom_histogram(binwidth = 3)+
+  scale_x_continuous(limits = c(0,100)) + facet_wrap(~Zone) +
+  labs(title = "distribution of historical prices across texas zones", x = "price ($/MWh)", y = "hours") 
 ```
 
 Stacked area chart of generation in model during peak days
@@ -240,6 +246,14 @@ ggplot(medprice,aes(x=Date, y = medprice)) + geom_line() +
   labs(title = "Zoom - MEDIAN 2016 ERCOT energy prices ($/MWh)")
 ```
 
+```{r}
+prod_o1_stack = prod_o1 %>%
+  mutate(gen_type = str_split(GEN_IND,"-",simplify=T)[,1]) %>%
+  group_by(gen_type,t) %>%
+  summarise(MWout = sum(MWout))
+
+ggplot(prod_o1_stack, aes(x=t,y=MWout,fill = gen_type)) + geom_area() + facet_wrap(~gen_type)
+```
 ```{r echo=FALSE}
 #plot
 #use geom_area, see "Stacked Area Chart" at http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html
@@ -313,7 +327,7 @@ The mean and median of the simulated o1 price are:
 mean: `r mean(prod_margprice$margprice[prod_margprice$scenario == "o1"])` and median: `r median(prod_margprice$margprice[prod_margprice$scenario == "o1"])`.
 
 So the *mean* and *median* are higher in my model, but the right tail is much shorter, which we can see from both the # of hours greater than a threshold, and from the difference between mean and median.
-***
+
 What about the effect of transmission constraints on local prices? to attempt to exclude that, I will look at the *median* price in texas across all zones.
 
 ```{r}
@@ -352,8 +366,22 @@ ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
 So based on this, the high prices I'm seeing look almost normal - the trendline doesn't really break $50. 
 
 # look at shadow price of supply=demand as saved by model
-What is the format of the dual variable?
+Compare shadow price of constraint (in o1) to demand level (o1) and to the marginal generator cost (o1)....
 ```{r}
 demanddual = read_csv(file = paste0(outputfol,"demanddual.csv"))
 dim(demanddual)
+totdemand = prod_o1 %>%
+  group_by(t) %>%
+  summarise(dem = sum(MWout))
+
+demdf = merge(totdemand,demanddual, by = "t")
+ggplot(demdf,aes(x=dem, y = x1)) + geom_point(size = 0.01) + labs(x="Demand MW", y = "Shadow price of supply=demand")
 ```
+```{r}
+dem2df = merge(prod_margprice,demanddual, by = "t")
+ggplot(dem2df,aes(x=margprice, y = x1)) + 
+  geom_point(size = 0.01) + 
+  labs(x="Marginal generator cost ($/MWh)", y = "Shadow price of supply>=demand")
+```
+
+This is a strange relationship and makes me wonder if I've plotted this wrong

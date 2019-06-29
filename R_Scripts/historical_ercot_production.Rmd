@@ -1,20 +1,26 @@
 ---
-title: "Historical_ERCOT_production"
-output: html_notebook
+title: "Historical ERCOT production"
+output:
+  html_document:
+    df_print: paged
 ---
 
+June 28th, 2019
+Patricia Levi
 
+The idea here is to use historial production information from ERCOT to assess if my simulation of Nuclear and Hydro resources (which are ~ always on) is reasonable. The driver for this concern is a lack of spread in marginal prices. 
 ```{r}
 library(tidyverse)
 library(lubridate)
 library(readxl)
 library(viridis)
+knitr::opts_chunk$set(echo = FALSE) 
 
 base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
 input_fol = "Data/julia_input/"
 default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
 ```
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #iterate over all months
 months = c("Jan16","Feb16","Mar16","Apr16","May16","Jun16","Jul16","Aug16","Sep16","Oct16","Nov16","Dec16")
 for(i in 1:12) {
@@ -29,7 +35,13 @@ for(i in 1:12) {
   # time_names = hour_names + minutes
   time_names =str_c(as.character(hour_names), as.character(minutes), sep=":")
   column_names = c("Date-Fuel","Total", as.character(time_names))
-  names(fuel_report) = column_names
+  
+  if(length(names(fuel_report))> length(column_names)){
+    # indicates that there are DST columns
+    column_names = c(column_names, c("24:00","24:15","24:30","24:45")) # NEED TO DEAL WITH DST COLUMNS UGH
+  }
+
+  names(fuel_report) = column_names 
   
   # parse fuel, date
   fuel_report$Date = str_split(fuel_report$`Date-Fuel`,"_", simplify=T)[,1]
@@ -55,20 +67,43 @@ fuel_hourly$datetime = mdy_h(str_c(fuel_hourly$Date,fuel_hourly$hour,sep="_"))
 ```
 ```{r}
 ggplot(fuel_hourly,aes(x=datetime,y=totMWH,color=Fuel)) + geom_line() +
-  theme_bw() + labs(title = "historical production, ERCOT")
+  theme_bw() + labs(title = "historical production by generator type, ERCOT 2016")
+```
+It would be great to create a function that easily created a stacked area chart from this type of information...
+```{r}
+# reorder factors...
+# data$Sector=factor(data$Sector , levels=levels(data$Sector)[c(1,4,3,2,7,6,5)])
+fuel_hourly_stack = fuel_hourly
+fuel_hourly_stack$Fuel = factor(fuel_hourly_stack$Fuel)
+fuel_hourly_stack$Fuel = factor(fuel_hourly_stack$Fuel, levels = levels(fuel_hourly_stack$Fuel)[c(7,9,1,4,3,2,8,5,6)])
+
+ggplot(fuel_hourly_stack,aes(x=datetime,y=totMWH,fill=Fuel))  + geom_area(color = "black", size = 0.05) + 
+  scale_x_datetime(limits = c(mdy_hm("05/01/2016 12:00 UTC"), mdy_hm("06/01/2016 12:00 UTC")))
+```
+```{r}
+ggplot(fuel_hourly_stack,aes(x=datetime,y=totMWH,fill=Fuel))  + geom_area(color = "black", size = 0.05) 
+```
+Seems like nuclear shutdowns are filled in by coal? Also seems like hydro variation is pretty small in the grand scheme of things. Nuclear is more interesting/consequential.
+```{r}
+ggplot(fuel_hourly_stack,aes(x=datetime,y=totMWH,fill=Fuel))  + geom_area(color = "black", size = 0.05)  +
+  facet_wrap(~Fuel)
 ```
 
 ```{r}
 fuel_hourly_hydro = fuel_hourly %>%
   filter(Fuel == "Hydro")
 ggplot(fuel_hourly_hydro,aes(x=datetime,y=totMWH,color=Fuel)) + geom_line() +
-  theme_bw() + labs(title = paste("historical production, ERCOT",month))
+  theme_bw() + labs(title = paste("historical hydro production, ERCOT 2016"))
 ```
+It seems like it might make sense to restrict Hydro to its maximum production level by month. Could accomplish this by (1) modifying the max capacity of hydro through the availability factor or (2) setting a limit on the total amount of water that can be used/MWh generated in a 5 day period based on the historical average by month. (2) would be more computationally intensive, but would probably encourage the type of ramping behavior seen here.
+Also, hydro seems to be quite dynamic in its ramping, something that my model doesn't do. What dynamics drive this behavior?
+Overall, however, hydro is a small piece of the pie. While restricting its production would definitely add some realism, 
 ```{r}
 fuel_hourly_nuclear = fuel_hourly %>%
   filter(Fuel == "Nuclear")
 ggplot(fuel_hourly_nuclear,aes(x=datetime,y=totMWH,color=Fuel)) + geom_line() +
-  theme_bw() + labs(title = paste("historical production, ERCOT",month))
+  theme_bw() + labs(title = paste("historical Nucear production, ERCOT 2016"))
 
 ```
 
+It seems like nuclear occasionally goes down for maintenance. This is two nuclear plants, so looks like one of them is offline at any given time. The times that they are offline don't visually correlate with price spikes in historical prices. Would it be useful to integrate this historical performance into the model by modifying the availability factors of Nuclear? I'm not convinced it would be additive. 
