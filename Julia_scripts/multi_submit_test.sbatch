@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=7d_6int_multirun
-#SBATCH --output=7d_6int_multirun_%A_%a.out
-#SBATCH --error=7d_6int_multirun_%A_%a.err
+#SBATCH --job-name=test1_multirun
+#SBATCH --output=test1_multirun_%A_%a.out
+#SBATCH --error=test1_multirun_%A_%a.err
 #SBATCH --time=2:00:00
 #SBATCH -p normal
 #SBATCH --mem=20G

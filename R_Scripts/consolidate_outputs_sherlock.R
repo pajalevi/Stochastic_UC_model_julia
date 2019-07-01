@@ -48,10 +48,10 @@ write.csv(prod, paste0(output_fol,"prod.csv"))
 rm(prod)
 
 print("Loading demand dual")
-demanddual = loadTimeseriesData(output_fol,"supplydemand_shadow", overlaplength,2)
+demanddual = loadTimeseriesData(output_fol,"supplydemand_shadow", overlaplength,2, probabilities = F) # works w 1st stage...should be 2nd stage tho!
 write.csv(demanddual, paste0(output_fol,"demanddual.csv"))
 rm(demanddual) #memory cleanup
 
 print("Loading mingen dual data")
-mingendual = loadTimeseriesData(output_fol,"mingen_shadow", overlaplength,2) ## DOESNT WORK!!
+mingendual = loadTimeseriesData(output_fol,"mingen_shadow", overlaplength,2, probabilities = F) ## works w 2nd stange, probs = F
 write.csv(mingendual, paste0(output_fol,"mingendual.csv"))

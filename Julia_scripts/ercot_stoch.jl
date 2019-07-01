@@ -164,6 +164,7 @@ inputs = unstack(read_inputs,:rowkey, :input_name, Symbol(input_version))
 startlim = parse(Float64,inputs[1,:startlim])
 hourlim = parse(Float64,inputs[1,:hourlim])
 energylim = parse(Float64,inputs[1,:energylim])
+ramplims = parse(Float64,inputs[1,:ramplims])
 dr_override = parse(Bool,lowercase(inputs[1,:dr_override]))
 dr_varcost = parse(Float64,inputs[1,:dr_varcost])
 randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
@@ -468,8 +469,10 @@ end
     start_num[g,t,o] >= v[g,t,o])
 
 #RAMP RATE -
+if ramplims !=0
     @constraint(m,ramplim[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
         p[g,t,o] - p[g,t-1,o] <= (rampmax[g] * pmax[g]))
+end
 
 # ------ DR USAGE LIMITS
 # Require that each period starts at the beginning of a new day

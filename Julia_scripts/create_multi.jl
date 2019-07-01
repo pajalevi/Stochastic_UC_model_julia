@@ -48,6 +48,8 @@ end
 #create_multi(7*24,12,"7d_12o_periods",
 # "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
 
+create_multi(5*24,6,"5d_6o_periods","/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
+
 create_multi(7*24,6,"7d_6o_periods",
 "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/")
 

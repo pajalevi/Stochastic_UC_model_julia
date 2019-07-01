@@ -1,3 +1,6 @@
+# visualize_DR_use.R
+# this function wraps around combine_run_results.R and adds 
+# the ability to iterate over multiple runs, and generate selected plots
 # use plotDRUse()
 # March 2019
 
@@ -31,9 +34,10 @@ runIDs3 = c("start3_keyDays","basenoDR_keyDays", "sensDR1_keyDays")
 runDates3=c("2019-03-28","2019-03-27","2019-03-28")
 runIDs4 = c("c2advNot1_keyDays","c2advNot2_keyDays","c2advNot3_keyDays")
 runDates4 = rep("2019-03-29",3)
-
 runIDs5 = c("base_noDRfullyear")
 runDates5 = c("2019-05-02")
+runIDs6 = c("advNot1_keyDays_noRampLim","advNot2_keyDays_noRampLim","advNot3_keyDays_noRampLim")
+runDates6 = rep("2019-06-28",3)
 
 runIDs = runIDs5#c(runIDs1,runIDs2)
 runDates = runDates5#c(runDates1, runDates2)
@@ -41,7 +45,7 @@ runDates = runDates5#c(runDates1, runDates2)
 ## run options
 summary_combine = T # needed to create prod.csv
 plotDR = F
-genbreakdown_only = F
+genbreakdown_only = T
 rampdata_df = F
 ##----##----##----##
 
@@ -50,12 +54,12 @@ default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
 
 if(!SHRLK){
   source(paste0(base_fol,"Julia_UC_Github/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
-  source(paste0(base_fol,"Julia_UC_Github/R_Scripts/consolidatedAnalysisFns.R"))
-  source(paste0(base_fol,"Julia_UC_Github/R_Scripts/combine_run_results.R"))
+  source(paste0(base_fol,"Julia_UC_Github/R_Scripts/consolidatedAnalysisFns.R")) # contains plotting functions
+  source(paste0(base_fol,"Julia_UC_Github/R_Scripts/combine_run_results.R")) # contains combineRunResults()
 } else{
-  source(paste0(base_fol,"code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
-  source(paste0(base_fol,"code/R_Scripts/consolidatedAnalysisFns.R"))
-  source(paste0(base_fol,"code/R_Scripts/combine_run_results.R"))
+  source(paste0(base_fol,"code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData()
+  source(paste0(base_fol,"code/R_Scripts/consolidatedAnalysisFns.R")) # contains plotting functions
+  source(paste0(base_fol,"code/R_Scripts/combine_run_results.R")) # contains combineRunResults()
 }
 
 # combine run results

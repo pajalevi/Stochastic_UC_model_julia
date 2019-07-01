@@ -1,6 +1,7 @@
 # combine_run_results.R
 # reads in output from model (via loadTimeseriesData() in mergeTimeseriesData.R)
 # extracts key outputs, makes a few graphs, and saves key numbers in a csv
+# also indicates if any runs were missing (and fails if so), saving a csv of that info
 # march 2019
 # Patricia levi
 
