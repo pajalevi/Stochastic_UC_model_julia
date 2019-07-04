@@ -1,0 +1,111 @@
+---
+title: "ARMA investigation"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Taken from arma_scenario_gen.R
+
+```{r include=FALSE}
+# setup and load data
+library(tidyverse)
+library(lubridate)
+
+data_directory = "/Users/patricia/Documents/Google Drive/stanford/SEED/"
+all_dat = read_csv(paste0(data_directory,"EBA_BA_level.csv"))
+ercot = select(all_dat, X1,contains("ERCO-ALL")) #ERCOT
+
+# select date column 
+# this loads as a 'date-time' object aka POSIXct
+# manipulable with functions from package 'lubridate'
+date = select(all_dat, contains("X1")) 
+date$year = year(date$X1)
+date$month = month(date$X1)
+date$hour = hour(date$X1)
+date$yday = yday(date$X1)
+date$wday = wday(date$X1, label=TRUE)
+
+rm(all_dat)
+ercot$error = ercot$`EBA.ERCO-ALL.DF.H` - ercot$`EBA.ERCO-ALL.D.H`
+
+dercot = cbind(ercot, date[,2:6])
+# make col for season
+dercot$season = "1_winter"
+dercot$season[dercot$month >= 3 & dercot$month <= 5] = "2_spring"
+dercot$season[dercot$month >= 6 & dercot$month <= 8] = "3_summer"
+dercot$season[dercot$month >= 9 & dercot$month <= 11] = "4_fall"
+
+dercot$errorfrac = (dercot$`EBA.ERCO-ALL.DF.H` - dercot$`EBA.ERCO-ALL.D.H`)/dercot$`EBA.ERCO-ALL.D.H`
+
+errsel16 = !is.na(dercot[,"errorfrac"]) & dercot$year==2016
+errf = dercot[errsel16,"errorfrac"]
+
+```
+Plot of error as a fraction of total demand 
+```{r}
+ggplot(dercot[errsel16,], aes(x=X1, y = errorfrac)) + geom_line() +theme_bw()
+```
+```{r}
+ggplot(dercot[errsel16,],aes(x=errorfrac)) + geom_histogram() + theme_bw() +
+  labs(title = "Histogram of frequency of fractional error")
+```
+
+acf and pacf plots of fractional error
+```{r,echo=FALSE, fig.width=3, fig.height=3, fig.show='hold'}
+acf(errf, lag.max = 100)
+pacf(errf)
+
+```
+The ACF declines gradually while the PACF declines much more rapidly, which indicates an AR model. But what order of AR model? AR(3). Or AR(25) ish... a lag of 24 is significant for obvious reasons, and there are a few significant intervals after that.
+
+# Implementing an AR(>= 24) model
+We should test an AR model with p=3,24,25,26. We can validate the goodness of simulation by how closely the summary statistics match the original dataset. 
+
+```{r echo=FALSE, cache=TRUE}
+  print("Original data summary stats")
+  print(summary(errf))
+  writeLines("\n")
+# try an ARMA model
+for(i in c(3,24,25,26)){ #
+  p=i #AR
+  q=0 #MA
+  xarma = arima(errf, order = c(p,0,q))
+  # simulation based on ARMA model
+  if(q>0){
+    macoef <- xarma$coef[(p+1):(p+q)]
+    xarmasim = arima.sim(model = list(ar = xarma$coef[1:p], ma = macoef),sd = sd(errf), n=1000)
+  } else{ 
+    xarmasim = arima.sim(model = list(ar = xarma$coef[1:p]),sd = sd(errf), n=1000)
+  }
+  # Compare summary statistics
+  print(paste0("AR(",p,") model results:"))
+  print("Simulation summary stats")
+  print(summary(xarmasim))
+  print("Difference between original and simulation")
+  print(summary(errf) - summary(xarmasim))
+  print("Add a correction in which simulation is divided by the ratio of the two SDs")
+  correction = sd(xarmasim)/sd(errf)
+  print(summary(errf) - summary(xarmasim/correction))
+  writeLines("\n")
+}
+# correction = diff(range(xarmasim))/diff(range(errf))
+# summary(errf) - summary(xarmasim/correction)
+# correction = diff(quantile(xarmasim,c(0.25,0.75)))/diff(quantile(errf,c(0.25,0.75)))
+# summary(errf) - summary(xarmasim/correction)
+
+```
+The difference between these three models is not great. The p=24-26 simulations are all relatively similar. The Min and 1Q are a little better represented. Dividing by the ratio of the standard deviations improves the summary stats significantly. 
+
+Go back to arma_scenario_gen.R to create and save simulations based on that. Use a correction. 
+
+# ACF and PACF of diff(errf)
+Just to test, we can look at the PACF and ACF when we take one diff
+
+```{r, fig.width=3, fig.height=3, fig.show='hold'}
+acf(diff(errf), lag.max = 50)
+pacf(diff(errf))
+```
+This doesn't appear to be an improvement, so lets stick with our AR() model found above.
+

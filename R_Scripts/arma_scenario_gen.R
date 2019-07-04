@@ -41,6 +41,7 @@ pacf(xarmasim)
 
 summary(errf)
 summary(xarmasim)
+summary(errf) - summary(xarmasim)
 correction = sd(xarmasim)/sd(errf)
 summary(errf) - summary(xarmasim/correction)
 correction = diff(range(xarmasim))/diff(range(errf))

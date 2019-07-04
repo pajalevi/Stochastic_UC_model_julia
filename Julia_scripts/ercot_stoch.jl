@@ -596,11 +596,12 @@ wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
 writecsvmulti(wdf,output_fol,"slow_commitment",multiTF,periodsave)
 
+# Redundant with startup of all generators --
 # print("startup of slow generators:")
-z_out = getvalue(z)
-zdf = DataFrame(transpose(z_out))
-names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-writecsvmulti(zdf,output_fol,"slow_startup",multiTF,periodsave)
+# z_out = getvalue(z)
+# zdf = DataFrame(transpose(z_out))
+# names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
+# writecsvmulti(zdf,output_fol,"slow_startup",multiTF,periodsave)
 
 # display(getvalue(z))
 
@@ -649,31 +650,32 @@ output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
 writecsvmulti(output_summary,output_fol,"summary_stats",multiTF,periodsave)
 
 # Get dual variables and save
+if !trueBinaryStartup
+    #supplydemand #2D
+    sd_shadow = DataFrame(getdual(supplydemand))
+    writecsvmulti(sd_shadow,output_fol,"supplydemand_shadow",multiTF,periodsave)
 
-#supplydemand #2D
-sd_shadow = DataFrame(getdual(supplydemand))
-writecsvmulti(sd_shadow,output_fol,"supplydemand_shadow",multiTF,periodsave)
-
-### mingen ###
-mingen_shadow = getdual(mingen)
-mingen_sf = convert3dto2d(mingen_shadow,1, 3,  2,
-    vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
-     genset[:,:plantUnique])
-# only save rows where there is a nonzero shadow price
-shadowsum = sum(convert(Array{Float64},mingen_sf[:,1:n_omega]),2)
-saveind = find(shadowsum .!= 0)
-writecsvmulti(mingen_sf[saveind,:],output_fol,"mingen_shadow",multiTF,periodsave)
-
-### type3dr ###
-if DRtype == 3
-    type3dr_shadow = getdual(type3dr)
-    type3dr_sf = convert3dto2d(type3dr_shadow,1, 3,  2,
-        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-         genset[dr_ind,:plantUnique])
+    ### mingen ###
+    mingen_shadow = getdual(mingen)
+    mingen_sf = convert3dto2d(mingen_shadow,1, 3,  2,
+        vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
+         genset[:,:plantUnique])
     # only save rows where there is a nonzero shadow price
-    shadowsum = sum(convert(Array{Float64},type3dr_sf[:,1:n_omega]),2)
+    shadowsum = sum(convert(Array{Float64},mingen_sf[:,1:n_omega]),2)
     saveind = find(shadowsum .!= 0)
-    writecsvmulti(type3dr_sf[saveind,:],output_fol,"type3dr_shadow",multiTF,periodsave)
+    writecsvmulti(mingen_sf[saveind,:],output_fol,"mingen_shadow",multiTF,periodsave)
+
+    ### type3dr ###
+    if DRtype == 3
+        type3dr_shadow = getdual(type3dr)
+        type3dr_sf = convert3dto2d(type3dr_shadow,1, 3,  2,
+            vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+             genset[dr_ind,:plantUnique])
+        # only save rows where there is a nonzero shadow price
+        shadowsum = sum(convert(Array{Float64},type3dr_sf[:,1:n_omega]),2)
+        saveind = find(shadowsum .!= 0)
+        writecsvmulti(type3dr_sf[saveind,:],output_fol,"type3dr_shadow",multiTF,periodsave)
+    end
 end
 
 ### ramplim ###

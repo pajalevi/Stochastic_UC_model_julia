@@ -39,8 +39,8 @@ runDates5 = c("2019-05-02")
 runIDs6 = c("advNot1_keyDays_noRampLim","advNot2_keyDays_noRampLim","advNot3_keyDays_noRampLim")
 runDates6 = rep("2019-06-28",3)
 
-runIDs = runIDs5#c(runIDs1,runIDs2)
-runDates = runDates5#c(runDates1, runDates2)
+runIDs = runIDs6#c(runIDs1,runIDs2)
+runDates = runDates6#c(runDates1, runDates2)
 
 ## run options
 summary_combine = T # needed to create prod.csv
