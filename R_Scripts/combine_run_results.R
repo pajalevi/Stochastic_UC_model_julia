@@ -30,26 +30,26 @@ source(paste0(baseFol,"/code/R_Scripts/consolidatedAnalysisFns.R"))
 
 
 ### PARAMS ####----##
-inputfolID = "5d_keyDays"
-runID = "avail2_keyDays" #"hour1" #"avail2"
-runDate = "2019-03-17" #this might differ across runs! need to consolidate
-overlaplength = 24
-nperiods = 22
-graphs = FALSE
+# inputfolID = "5d_keyDays"
+# runID = "avail2_keyDays" #"hour1" #"avail2"
+# runDate = "2019-03-17" #this might differ across runs! need to consolidate
+# overlaplength = 24
+# nperiods = 22
+# graphs = FALSE
 ##----##----##----##
 
-combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, graphs = T, 
+combineRunResults <- function(runID, runDate, graphs = T, 
                               base_fol = baseFol, 
                               output_fol_base = outputFolBase ,
                               input_fol = inputFol,
                               SHRLOK = SHRLK){  
   
   outputID = paste0(runID,"_",runDate)
-  instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
+  # instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/") # TODO: inputfolID should come from inputs_file -> params$timeseriesID
   output_fol = paste0(base_fol,output_fol_base,outputID,"/")
   default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
   
-  # get input parameters
+  # get input parameters ####
   if(!SHRLOK){
     inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
   }else{
@@ -58,6 +58,12 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
   allinputs = read_csv(inputs_file)
   params = allinputs[,c("input_name",runID)]
   params = spread(params, key = input_name, value = runID)
+  params$nrandp = as.numeric(params$nrandp)
+  overlaplength = as.numeric(params$overlapLength)
+  print(paste("overlap length is",overlaplength,"and number of scenarios is",params$nrandp))
+  
+  inputfolID = params$timeseriesID
+  instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/") 
   
   # load gendat - based on name in inputs_file
   gendat = read_csv(paste0(default_in_fol,params$genFile))
@@ -68,24 +74,26 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
     print(paste0("Reset VCost for ",length(drind)," DR plants"))
   }
   
-  
   #---------------------------------
-  ### find max first-stage committed capacity #####
-  #---------------------------------
+  ### load max slow committed capacity #####
   
   # load slow commitment 
   slowcomt = loadTimeseriesData(output_fol,"slow_commitment", overlaplength,1)
   
-  # write missing periods
+  # ID missing periods ####
   theseperiods = unique(slowcomt$nperiod)
   print("completed periods:")
   print(theseperiods)
   print(paste("number of completed periods is", length(theseperiods)))
   
+  if(!file.exists(paste0(instance_in_fol,"orderoffiles.csv"))){
+    arrayind = data.frame(filename = list.files(path = instance_in_fol, pattern = "periods_"))
+    arrayind$arraynum = 0:(length(arrayind$filename)-1)
+    periodinfo = t(array(unlist(strsplit(as.character(arrayind$filename),"_")),dim=c(4,nrow(arrayind))))
+    arrayind$periodnum = periodinfo[,2]
+    write_csv(arrayind,paste0(instance_in_fol,"orderoffiles.csv"))
+  }
   arrayind = read_csv(paste0(instance_in_fol,"orderoffiles.csv"))
-    # periodinfo = t(array(unlist(strsplit(arrayind$filename,"_")),dim=c(4,nrow(arrayind))))
-    # arrayind$periodnum = periodinfo[,2]
-    # write_csv(arrayind,paste0(instance_in_fol,"orderoffiles.csv"))
   
   full = as.numeric(arrayind$periodnum)
   missingnum = full[which(!(full %in% theseperiods))]
@@ -128,31 +136,39 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
   
   rm(slowcomt) #for memory management
   #---------------------------------
-  ### find max up and down ramp rates of system ####
+  ### Load production data ####
   
   
   # load production, startup data
-  if(!file.exists(paste0(output_fol,"prod.csv"))){
+  if(!file.exists(paste0(output_fol,"prod.csv")) | !file.exists(paste0(output_fol,"slow_gens.csv"))){
     print("Loading fast production data")
     fastprod = loadTimeseriesData(output_fol, "fast_production", overlaplength,2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
     print("Loading slow production data")
     slowprod = loadTimeseriesData(output_fol, "slow_production", overlaplength,2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
     slowprod$speed = "slow"
     fastprod$speed = "fast"
+    
+    # ID slow gens - a simple vector
+    slowgens = unique(slowprod$GEN_IND)
+    write.csv(slowgens, paste0(output_fol,"slow_gens.csv"))
+    
     prod = rbind(slowprod, fastprod)
     names(prod)[names(prod) == 'value'] <- 'MWout'
     rm(fastprod, slowprod)
     # write_csv(prod, paste0(output_fol,"prod.csv")) # cannot turn off scientific notation in write_csv
-    prod$prob = 1/25
+    prod$prob = 1/params$nrandp
     
     write.csv(prod, paste0(output_fol,"prod.csv"))
   } else {
     print("Loading prod.csv")
     prod = read_csv(file = paste0(output_fol,"prod.csv"))
-    prod$prob = 1/25
-    
+    prod$prob = 1/params$nrandp
+    slowgens = read_csv(file = paste0(output_fol,"slow_gens.csv"))
+    slowgens = slowgens$x
+    print(head(slowgens))
   }
   
+  ## Find ramp rates of system ####
   # differentiate by slow ramp and total ramp
   prodramp= prod %>%
     group_by(scenario,speed,t) %>%
@@ -204,7 +220,7 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
   
   
   
-  # visualize ramp
+  # visualize/summarize ramp ####
   # ggplot(prodramp,aes(x=ramp)) + geom_histogram()
   
   # visualize daily max ramp
@@ -288,32 +304,35 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   #---------------------------------
-  ## consolidated data of generation source ####
+  ## consolidated data of generation source: fuelBreakdown() ####
   fuelBreakdown(prod2,paste0(base_fol,output_fol_base,"plots/"),runID)
   paste0(base_fol,output_fol_base,"plots/")
-  #---------------------------------
-  #### collect cost information ####
+  rm(prod2) # memory mangement
+    #### TODO: collect cost information ####
   
   # need to infer costs from production, startup info
   # and weight scenarios to find expected cost
   
   #-------------------
-  ## startup costs ##
+  ## startup data / costs ####
   # differentiate by 1st stage (slow) and expected 2nd stage (fast)
   
   # load slowstartup to identify slow generators
-  slowstartup = loadTimeseriesData(output_fol,"slow_startup",overlaplength,1)
-  slowstartup = slowstartup %>%
-    gather(key = "generator", value = "start", -t)
-  
-  slowgens = unique(slowstartup$generator)
+  # TODO: different way of ID-ing slow gens that does not rely on slowstartup
+  #       do based on slowprod?
+  # slowstartup = loadTimeseriesData(output_fol,"slow_startup",overlaplength,1)
+  # slowstartup = slowstartup %>%
+  #   gather(key = "generator", value = "start", -t)
+  # 
+  # slowgens = unique(slowstartup$generator)
   speedslow = data_frame(GEN_IND = slowgens, speed = "slow")
   
   # load and manipulate all startup data
   if(!file.exists(paste0(output_fol,"v_startup_all.csv"))){
+    print("Loading startup data")
     allstartup = loadTimeseriesData(output_fol,"v_startup",overlaplength,
                                     2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
-    allstartup$prob=1/25
+    allstartup$prob=1/params$nrandp
     names(allstartup)[names(allstartup) == 'value'] <- 'startup'
   
     write.csv(allstartup, paste0(output_fol,"v_startup_all.csv"))
@@ -324,11 +343,12 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
   
   # allstartup = allstartup %>%
     # merge(speedslow, by = "GEN_IND", all.x=T)
+  print("merge with gen speed info")
   allstartup = merge(as.data.table(allstartup), as.data.table(speedslow),by = "GEN_IND", all.x=T)
   allstartup$speed[is.na(allstartup$speed)] = "fast"
   fastsel = which(allstartup$speed == "fast")
   
-  # merge with gen information
+  print("merge with other gen information")
   # allstartup = merge(allstartup, gendat[,c("plantUnique","StartCost")], all.x=T, by.x = "GEN_IND", by.y = "plantUnique")
   allstartup = merge(as.data.table(allstartup), as.data.table(gendat[,c("plantUnique","StartCost")]), all.x=T, by.x = "GEN_IND", by.y = "plantUnique")
   
@@ -342,6 +362,7 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
   startcost = allstartup %>%
     group_by(t, speed) %>%
     summarise(ecost = sum(expectedcost))
+  rm(allstartup) #memory management
   
   # plot ##
   startcostplot = startcost %>%
@@ -378,7 +399,7 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   #-------------------
-  ## production costs ##
+  ## production costs ####
   # differentiate by 1st stage and expected 2nd stage
   
   # prob already loaded and differentiated by speed
@@ -387,7 +408,7 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
   
   # associate generator production cost
   prod = merge(as.data.table(prod), as.data.table(gendat[,c("plantUnique","VCost","PLC2ERTA")]), all.x=T,by.x="GEN_IND",by.y="plantUnique")
-  prod$prob = 1/25
+  prod$prob = 1/params$nrandp
   
   prodcost = prod %>%
     mutate(expectedcost = MWout * VCost * prob) %>% # double check units
@@ -447,6 +468,7 @@ combineRunResults <- function(runID, runDate, overlaplength=24, nperiods=22, gra
                "expected DR all costs,",allcosttot$DR[1],"\n , \n",
                "Hours DR is on,", sum(dron)),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+  rm(allcosts,prodcost) # memory mangement
 }
 
 #---------------------------------

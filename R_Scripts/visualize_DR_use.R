@@ -22,12 +22,18 @@ if(SHRLK){
   input_fol = "Data/julia_input/"
 }
 
+# get all run parameters
+if(!SHRLK){
+  inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+}else{
+  inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
+}
+allinputs = read_csv(inputs_file)
+
 ### PARAMS ####----##
-inputfolID = "5d_keyDays"
 runIDs1 = c("advNot1_keyDays","advNot2_keyDays","advNot3_keyDays","avail1_keyDays","avail2_keyDays","hour1_keyDays","hour2_keyDays")#,"start1_keyDays","start2_keyDays")
 runDates1 = c(rep("2019-03-15",2),rep("2019-03-16",2),rep("2019-03-17",2),"2019-03-16")#,"2019-03-17","2019-03-16") #this might differ across runs! need to consolidate
-overlaplength = 12
-nperiods = 22
+# nperiods = 22
 runIDs2 = c("start1_keyDays","start2_keyDays","baseOldGen_keyDays" ,"energy1_keyDays","energy2_keyDays")
 runDates2=c("2019-03-23",     "2019-03-22",     rep("2019-03-23",3))
 runIDs3 = c("start3_keyDays","basenoDR_keyDays", "sensDR1_keyDays")
@@ -38,14 +44,22 @@ runIDs5 = c("base_noDRfullyear")
 runDates5 = c("2019-05-02")
 runIDs6 = c("advNot1_keyDays_noRampLim","advNot2_keyDays_noRampLim","advNot3_keyDays_noRampLim")
 runDates6 = rep("2019-06-28",3)
+runIDs7 = c(
+  # "sensNScen1","sensNScen2",
+  "sensOvLap1","sensOvLap2",
+            "sensOvLap3","sensOvLap4","sensPeriodLen1","sensPeriodLen2","sensPeriodLen3",
+            "sensPeriodLen4","sensBinary")
+runDates7 = rep("2019-07-04",11)
 
-runIDs = runIDs6#c(runIDs1,runIDs2)
-runDates = runDates6#c(runDates1, runDates2)
+runIDs = runIDs7#c(runIDs1,runIDs2)
+runDates = runDates7#c(runDates1, runDates2)
+inputfolID = "5d_keyDays" # for plotDR - need to fix to read in dynamically.
+# overlaplength = 12 # should be read in from inputs_ercot
 
 ## run options
 summary_combine = T # needed to create prod.csv
 plotDR = F
-genbreakdown_only = T
+genbreakdown_only = F # this is done in summary_combine
 rampdata_df = F
 ##----##----##----##
 
@@ -64,18 +78,24 @@ if(!SHRLK){
 
 # combine run results
 if(summary_combine){
+  print("starting combineRunResults")
   options(readr.num_columns = 0) # turn off read_csv messages
   for(r in 1:length(runIDs)){
     print(runIDs[r])
     combineRunResults(runIDs[r],runDates[r],graphs=F)
     print("Done, resting")
-    Sys.sleep(60) #let the computer cool down for 2 minutes
+    Sys.sleep(15) #let the computer cool down
   }
 }
 
 # plot DR use
 if(plotDR){
+  print("starting plotDRUse")
   for(r in 1:length(runIDs)){
+    params = allinputs[,c("input_name",runID)]
+    params = spread(params, key = input_name, value = runID)
+    overlaplength = as.numeric(params$overlapLength)
+    
     outputID = paste0(runIDs[r],"_",runDates[r])
     output_fol = paste0(base_fol,output_fol_base,outputID,"/")
     output_fol = paste0(base_fol,output_fol_base,outputID,"/")
@@ -92,17 +112,12 @@ if(plotDR){
 
 # only generate genbreakdown plot - done with in combineRunResults too
 if(genbreakdown_only){
+  print("starting genbreakdown")
   for(r in 1:length(runIDs)){
     print(runIDs[r])
     outputID = paste0(runIDs[r],"_",runDates[r])
     output_fol = paste0(base_fol,output_fol_base,outputID,"/")
     # load gendat
-    if(!SHRLK){
-     inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
-    }else{
-      inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
-    }
-    allinputs = read_csv(inputs_file)
     params = allinputs[,c("input_name",runID)]
     params = spread(params, key = input_name, value = runID)
     gendat = read_csv(paste0(default_in_fol,params$genFile))
@@ -121,17 +136,12 @@ if(genbreakdown_only){
 
 # create dataframe of ramping data
 if(rampdata_df){
+  print("starting rampdata")
   for(r in 1:length(runIDs)){
     print(runIDs[r])
     outputID = paste0(runIDs[r],"_",runDates[r])
     output_fol = paste0(base_fol,output_fol_base,outputID,"/")
-    # load gendat
-    if(!SHRLK){
-      inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
-    }else{
-      inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
-    }
-    allinputs = read_csv(inputs_file)
+
     params = allinputs[,c("input_name",runID)]
     params = spread(params, key = input_name, value = runID)
     gendat = read_csv(paste0(default_in_fol,params$genFile))

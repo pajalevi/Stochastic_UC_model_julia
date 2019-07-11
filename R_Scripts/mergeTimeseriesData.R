@@ -19,7 +19,7 @@ library(data.table)
 # allowedperiods = read.csv(paste0("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/base_2019-02/","periods_overlap_base_advNot2.csv"))
 ########
 
-loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_fol, nscen=25,
+loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_fol, nscen,
                                probabilities = T,dist_ID#,
                                # validP = allowedperiods
                                ){
@@ -89,12 +89,12 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       # trim output
       if(periodnum ==1){
         # trim end
-        tSel = which(output$t <= lastperiod - overlaplength/2 &
+        tSel = which(output$t <= lastperiod - overlap/2 &
                        output$t >= firstperiod + 4)
       } else{
         # trim both sides
-        tSel = which(output$t <= lastperiod - overlaplength/2 & 
-                       output$t >= firstperiod + overlaplength/2) }
+        tSel = which(output$t <= lastperiod - overlap/2 & 
+                       output$t >= firstperiod + overlap/2) }
       output = output[tSel,] 
       
       # combine with previous
@@ -104,14 +104,14 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       
       # error check
       t_jumps = diff(unique(output_all$t))
-      if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlaplength))){
+      if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlap))){
         warning("might have messed up trimming periods. Diffs in unique(t) are \n", t_jumps) }
     }
   # }
   return(output_all)
 }
 
-loadproduction <- function(instance_in_fol, output_fol, overlaplength) {
+loadproduction <- function(instance_in_fol, output_fol, overlap) {
   # instance_in_fol is the periods folder (in inputs)
   # output_fol is the output data folder
   # overlap is the number of hours of overlap between periods
@@ -138,10 +138,10 @@ loadproduction <- function(instance_in_fol, output_fol, overlaplength) {
     # trim prod
     if(as.numeric(periodinfo[2]) ==1){
       # trim end
-      tSel = which(prod$t <= lastperiod - overlaplength/2)
+      tSel = which(prod$t <= lastperiod - overlap/2)
     } else{
       # trim both sides
-      tSel = which(prod$t <= lastperiod - overlaplength/2 & prod$t >= firstperiod + overlaplength/2)
+      tSel = which(prod$t <= lastperiod - overlap/2 & prod$t >= firstperiod + overlap/2)
     }
     prod = prod[tSel,] 
     
@@ -153,7 +153,7 @@ loadproduction <- function(instance_in_fol, output_fol, overlaplength) {
     
     # error check
     t_jumps = diff(unique(prod_all$t))
-    if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlaplength))){
+    if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlap))){
       warning("might have messed up trimming periods. Diffs in unique(t) are \n", t_jumps)
     }
   }
