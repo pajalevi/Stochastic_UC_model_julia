@@ -8,6 +8,9 @@
 # loadproduction is its precursor, which load slow and fast production data
 # concatenates them, and merges multiple periods
 
+# loadTimeseriesData()
+# consolidates a given type of timeseries data from multiple runs of ercot_stoch.jl model
+# and saves it as a single file
 # Feb 2018
 # Patricia Levi
 
@@ -20,7 +23,7 @@ library(data.table)
 ########
 
 loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_fol, nscen,
-                               probabilities = T,dist_ID#,
+                               probabilities = T,dist_ID,endtrim#,
                                # validP = allowedperiods
                                ){
  # dist_ID="winter_ercot"
@@ -35,14 +38,32 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
  # print(paste("allowed files are", validP$x))
   
   all_files = list.files(path=output_fol, pattern = dataType)
-  if(length(all_files) == 0) { stop("no files found matching dataType ", dataType, " in folder ", output_fol)}
+  nfiles = length(all_files)
+  if(nfiles == 0) { stop("no files found matching dataType ", dataType, " in folder ", output_fol)}
   
-  for(i in 1:length(all_files)){
+  # ID which files are overlapping
+  allperiodinfo = str_split(all_files,"_|\\.|-|p",simplify=T)
+  lenInfo = ncol(allperiodinfo)
+  prev_overlap = as.numeric(allperiodinfo[2:nfiles,lenInfo - 2]) - as.numeric(allperiodinfo[1:(nfiles-1),lenInfo - 1])
+  print("Period overlaps are:")
+  print(prev_overlap)
+  # if i-th  prev_overlap <0 , then (i+1)th period overlaps with previous
+  # this should obviate 'overlap'
+  
+  ## check if any of the prev_overlap entries that are <0 are not the correct overlap. if so stop.
+  overlapsel = which(prev_overlap < 0)
+  if(sum(prev_overlap[overlapsel]*-1 != overlap) > 0){
+    print(paste("Period number: ",allperiodinfo[overlapsel,lenInfo - 3],
+          " overlaps with previous period by: ",prev_overlap[overlapsel]*-1), collapse = ", ")
+    stop("Period overlaps are not consistent with prescribed overlap of ",overlap)
+  }
+  
+  
+  for(i in 1:nfiles){
     print(all_files[i])
     # load period info for this file
-    xx = all_files[i]
-    periodinfo = strsplit(xx,"_|\\.|-|p")[[1]]
-    lenInfo = length(periodinfo)
+    # xx = all_files[i]
+    periodinfo = allperiodinfo[i,]
     firstperiod = as.numeric(periodinfo[lenInfo - 2])
     lastperiod = as.numeric(periodinfo[lenInfo - 1])
     periodnum = as.numeric(periodinfo[lenInfo - 3])
@@ -57,7 +78,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       output$nperiod = periodnum
       
       if(dataStage == 2){
-        # make t represent the hour of year, not hour of perood
+        # make t represent the hour of year, not hour of period
         output$t = output$t + firstperiod -1
         
         # gather scenario info into column
@@ -87,27 +108,62 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       } else{ stop("dataStage ", dataStage," is invalid. must be 1 or 2")}
       
       # trim output
-      if(periodnum ==1){
-        # trim end
-        tSel = which(output$t <= lastperiod - overlap/2 &
-                       output$t >= firstperiod + 4)
-      } else{
-        # trim both sides
-        tSel = which(output$t <= lastperiod - overlap/2 & 
-                       output$t >= firstperiod + overlap/2) }
+      if(i ==1){ ## is this the first period?
+        if(prev_overlap[i] < 0){ #does it overlap with second period
+          # trim beginning with endtrim
+          # trim end with overlap
+          tSel = which(output$t >= firstperiod + endtrim & 
+                         output$t <= lastperiod - overlap/2)
+          
+        } else {
+          ## trim both ends with endtrim
+          tSel = which(output$t >= firstperiod + endtrim & 
+                         output$t <= lastperiod - endtrim)
+        }
+
+      } else{ # not the first period
+        if(prev_overlap[i-1] < 0){ # does it overlap with previous period?
+          if(i==nfiles){ # is it the last period?
+            # trim beginning with overlap
+            # trim end with endtrim
+            tSel = which(output$t >= firstperiod + overlap/2 & 
+                           output$t <= lastperiod - endtrim)
+          } else if(prev_overlap[i] <0){ # does it overlap with next period?
+            # trim both ends with overlap
+            tSel = which(output$t >= firstperiod + overlap/2 & 
+                           output$t <= lastperiod - overlap/2)
+          } else { # does not overlap with next period
+            # trim beginning with overlap
+            # trim end with endtrim
+            tSel = which(output$t >= firstperiod + overlap/2 & 
+                           output$t <= lastperiod - endtrim)
+          }
+        } else { # does not overlap with previous period
+          if(i==nfiles){ # is it the last period?
+            # trim beginning with endtrim
+            # trim end with endtrim
+            tSel = which(output$t >= firstperiod + endtrim & 
+                           output$t <= lastperiod - endtrim)
+          } else if(prev_overlap[i] <0){ # does it overlap with next period?
+            # trim beginning with endtrim
+            # trim end with overlap
+             tSel = which(output$t >= firstperiod + endtrim & 
+                           output$t <= lastperiod - overlap/2)
+          } else { # does not overlap with next period
+            # trim both ends with endtrim
+            tSel = which(output$t >= firstperiod + endtrim & 
+                           output$t <= lastperiod - endtrim)
+          }
+        }
+      }
       output = output[tSel,] 
       
       # combine with previous
       if(i==1){ output_all = output 
       } else { 
-        output_all = rbind(output_all, output) }
-      
-      # error check
-      t_jumps = diff(unique(output_all$t))
-      if(sum(t_jumps >1 & t_jumps < (lastperiod - firstperiod - overlap))){
-        warning("might have messed up trimming periods. Diffs in unique(t) are \n", t_jumps) }
+        output_all = rbind(output_all, output) 
+      }
     }
-  # }
   return(output_all)
 }
 

@@ -26,7 +26,7 @@ if(SHRLK){
 
 ## source files ##
 source(paste0(baseFol,"/code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
-source(paste0(baseFol,"/code/R_Scripts/consolidatedAnalysisFns.R"))
+source(paste0(baseFol,"/code/R_Scripts/consolidatedAnalysisFns.R")) # genBreakdown()
 
 
 ### PARAMS ####----##
@@ -42,7 +42,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
                               base_fol = baseFol, 
                               output_fol_base = outputFolBase ,
                               input_fol = inputFol,
-                              SHRLOK = SHRLK){  
+                              SHRLOK = SHRLK, load_override = F, endtrim = NULL){  
   
   outputID = paste0(runID,"_",runDate)
   # instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/") # TODO: inputfolID should come from inputs_file -> params$timeseriesID
@@ -60,6 +60,8 @@ combineRunResults <- function(runID, runDate, graphs = T,
   params = spread(params, key = input_name, value = runID)
   params$nrandp = as.numeric(params$nrandp)
   overlaplength = as.numeric(params$overlapLength)
+  if(is.null(endtrim)){endtrim = overlaplength}
+  
   print(paste("overlap length is",overlaplength,"and number of scenarios is",params$nrandp))
   
   inputfolID = params$timeseriesID
@@ -78,7 +80,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   ### load max slow committed capacity #####
   
   # load slow commitment 
-  slowcomt = loadTimeseriesData(output_fol,"slow_commitment", overlaplength,1)
+  slowcomt = loadTimeseriesData(output_fol,"slow_commitment", overlaplength,1, endtrim=endtrim)
   
   # ID missing periods ####
   theseperiods = unique(slowcomt$nperiod)
@@ -140,11 +142,13 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   
   # load production, startup data
-  if(!file.exists(paste0(output_fol,"prod.csv")) | !file.exists(paste0(output_fol,"slow_gens.csv"))){
+  if(!file.exists(paste0(output_fol,"prod.csv")) | !file.exists(paste0(output_fol,"slow_gens.csv")) | load_override){
     print("Loading fast production data")
-    fastprod = loadTimeseriesData(output_fol, "fast_production", overlaplength,2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
+    fastprod = loadTimeseriesData(output_fol, "fast_production", overlaplength,2,instance_in_fol,params$nrandp,
+                                  dist_ID = params$stochID, probabilities = F, endtrim = endtrim)
     print("Loading slow production data")
-    slowprod = loadTimeseriesData(output_fol, "slow_production", overlaplength,2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
+    slowprod = loadTimeseriesData(output_fol, "slow_production", overlaplength,2,instance_in_fol,params$nrandp,
+                                  dist_ID = params$stochID, probabilities = F, endtrim = endtrim)
     slowprod$speed = "slow"
     fastprod$speed = "fast"
     
@@ -232,14 +236,13 @@ combineRunResults <- function(runID, runDate, graphs = T,
   #TODO: summarise prodramp by combining speeds first - this currently pits fast and slow against each other
   
   quants = quantile(prodrampday$daymaxramp[prodrampday$daymaxramp >0], probs = c(0.5,0.9,0.95,0.99,0.995,1), na.rm=T)
-  write(paste0("Ramp quantiles DR excluded: \n",
-               "50%,",quants[1],"\n",
-               "90%,",quants[2],"\n ",
-               "95%,",quants[3],"\n",
-               "99%,",quants[4],"\n",
-               "99.5%,",quants[5],"\n",
-               "100%,",quants[6],"\n",
-               "stdev",sd(prodrampday$daymaxramp[prodrampday$daymaxramp >0]),"\n"),
+  write(paste0("50% nonDR ramp quantile,",quants[1],"\n",
+               "90% nonDR ramp quantile,",quants[2],"\n ",
+               "95% nonDR ramp quantile,",quants[3],"\n",
+               "99% nonDR ramp quantile,",quants[4],"\n",
+               "99.5% nonDR ramp quantile,",quants[5],"\n",
+               "100% nonDR ramp quantile,",quants[6],"\n",
+               "stdev,",sd(prodrampday$daymaxramp[prodrampday$daymaxramp >0]),"\n"),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   
@@ -325,20 +328,20 @@ combineRunResults <- function(runID, runDate, graphs = T,
   #   gather(key = "generator", value = "start", -t)
   # 
   # slowgens = unique(slowstartup$generator)
-  speedslow = data_frame(GEN_IND = slowgens, speed = "slow")
+  speedslow = tibble(GEN_IND = slowgens, speed = "slow")
   
   # load and manipulate all startup data
-  if(!file.exists(paste0(output_fol,"v_startup_all.csv"))){
+  if(!file.exists(paste0(output_fol,"fast_startup_all.csv")) | load_override){
     print("Loading startup data")
     allstartup = loadTimeseriesData(output_fol,"v_startup",overlaplength,
-                                    2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F)
+                                    2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F, endtrim=endtrim)
     allstartup$prob=1/params$nrandp
     names(allstartup)[names(allstartup) == 'value'] <- 'startup'
   
-    write.csv(allstartup, paste0(output_fol,"v_startup_all.csv"))
+    write.csv(allstartup, paste0(output_fol,"fast_startup_all.csv"))
   } else {
     print("Loading v_startup_all.csv")
-    allstartup = read_csv(file = paste0(output_fol,"v_startup_all.csv"))
+    allstartup = read_csv(file = paste0(output_fol,"fast_startup_all.csv"))
   }
   
   # allstartup = allstartup %>%
@@ -395,7 +398,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
     spread(key=speed,value=ecost)
   # write to summary stats
   write(paste0("startup costs slow gens,",startcosttot$slow[1],"\n ",
-               "expected fast startup costs,",startcosttot$fast[1],"\n"),
+               "expected startup costs fast gens,",startcosttot$fast[1],"\n"),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   #-------------------
@@ -431,7 +434,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
     summarise(ecost = sum(ecost)) %>%
     spread(key=speed,value=ecost)
   # write to summary stats
-  write(paste0("prod costs slow gens,",prodcosttot$slow[1],"\n ",
+  write(paste0("slow prod costs,",prodcosttot$slow[1],"\n ",
                "expected fast prod costs,",prodcosttot$fast[1],"\n",
                "expected DR prod costs,",prodcosttot$DR[1],"\n"),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
@@ -460,13 +463,17 @@ combineRunResults <- function(runID, runDate, graphs = T,
     spread(key=speed,value=ecost)
   
   # count hours DR is on
-  dron = prod$MWout > 1e-5 & prod$speed =="DR"
+  dron = prod$MWout > 1e-2 & prod$speed =="DR"
+  drfull = prod$MWout > 999 & prod$speed =="DR"
     
   # write to summary stats
   write(paste0("all costs slow gens,",allcosttot$slow[1],"\n",
                "expected fast all costs,",allcosttot$fast[1],"\n",
-               "expected DR all costs,",allcosttot$DR[1],"\n , \n",
-               "Hours DR is on,", sum(dron)),
+               "expected DR all costs,",allcosttot$DR[1],"\n",
+               "expected Total costs,",allcosttot$DR[1] + allcosttot$fast[1] +allcosttot$slow[1],"\n",
+               "Hours DR is on,", sum(dron)),"\n",
+              "Hours DR is >99.9% on,",sum(drfull),"\n",
+              "total hours in simulation",length(unique(allcosts$t)),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   rm(allcosts,prodcost) # memory mangement
 }

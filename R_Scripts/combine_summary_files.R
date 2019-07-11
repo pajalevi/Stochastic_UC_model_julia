@@ -35,8 +35,6 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK){
   }
   allinputs = read_csv(inputs_file)
   
-  # create outputs matrix
-  alloutputs = as_tibble(matrix(nrow = length(runIDs), ncol = 51))
   
   for(i in 1:length(runIDs)){
     # load summary file
@@ -50,6 +48,9 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK){
 
     # name cols of alloutputs if needed
     if(i==1){
+      # create outputs matrix
+      alloutputs = as_tibble(matrix(nrow = length(runIDs), ncol = 1+ nrow(params) + nrow(summaryfile)))
+      
       names(alloutputs) = c("runID",params$input_name,summaryfile$output_type)
     }
     
