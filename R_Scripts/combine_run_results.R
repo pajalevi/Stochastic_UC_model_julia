@@ -464,6 +464,8 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   # count hours DR is on
   dron = prod$MWout > 1e-2 & prod$speed =="DR"
+  drsome = prod$MWout > 10 & prod$speed =="DR"
+  drpart = prod$MWout > 500 & prod$speed =="DR"
   drfull = prod$MWout > 999 & prod$speed =="DR"
     
   # write to summary stats
@@ -471,10 +473,13 @@ combineRunResults <- function(runID, runDate, graphs = T,
                "expected fast all costs,",allcosttot$fast[1],"\n",
                "expected DR all costs,",allcosttot$DR[1],"\n",
                "expected Total costs,",allcosttot$DR[1] + allcosttot$fast[1] +allcosttot$slow[1],"\n",
-               "Hours DR is on,", sum(dron)),"\n",
+               "Hours DR is on,", sum(dron),"\n",
+               "Hours DR is >1% on,",sum(drsome),"\n",
+               "Hours DR is >50% on,",sum(drpart),"\n",
               "Hours DR is >99.9% on,",sum(drfull),"\n",
-              "total hours in simulation",length(unique(allcosts$t)),
-        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
+              "total hours in simulation,",length(unique(allcosts$t))),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)
+  
   rm(allcosts,prodcost) # memory mangement
 }
 

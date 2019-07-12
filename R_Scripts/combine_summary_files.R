@@ -37,6 +37,7 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK){
   
   
   for(i in 1:length(runIDs)){
+    print(runIDs[i])
     # load summary file
     summaryfile = read_csv(paste0(base_fol,output_fol_base,runIDs[i],"_",runDates[i],
                                   "/summary_stats",runIDs[i],".csv"))

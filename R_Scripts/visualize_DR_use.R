@@ -45,7 +45,7 @@ runDates5 = c("2019-05-02")
 runIDs6 = c("advNot1_keyDays_noRampLim","advNot2_keyDays_noRampLim","advNot3_keyDays_noRampLim")
 runDates6 = rep("2019-06-28",3)
 runIDs7 = c(
-  # "sensNScen1","sensNScen2",
+  "sensNScen1","sensNScen2",
   "sensOvLap1","sensOvLap2",
             "sensOvLap3","sensOvLap4","sensPeriodLen1","sensPeriodLen2","sensPeriodLen3",
             "sensPeriodLen4","sensBinary")
@@ -82,7 +82,7 @@ if(summary_combine){
   options(readr.num_columns = 0) # turn off read_csv messages
   for(r in 1:length(runIDs)){
     print(runIDs[r])
-    combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = T,endtrim = 6)
+    combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = F,endtrim = 6)
     print("Done, resting")
     Sys.sleep(15) #let the computer cool down
   }
