@@ -1,8 +1,10 @@
 ---
 title: "Historical ERCOT production"
 output:
+  html_notebook: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 June 28th, 2019
@@ -21,7 +23,7 @@ input_fol = "Data/julia_input/"
 default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
 ```
 ```{r message=FALSE, warning=FALSE, include=FALSE}
-#iterate over all months
+#read in historical generation data - iterate over all months
 months = c("Jan16","Feb16","Mar16","Apr16","May16","Jun16","Jul16","Aug16","Sep16","Oct16","Nov16","Dec16")
 for(i in 1:12) {
   month = months[i]

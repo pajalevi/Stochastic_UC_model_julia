@@ -30,14 +30,43 @@ runID = "base_noDRfullyear"
 # print(test)
 ```
 ```{r include=FALSE}
-prod = read_csv(file = paste0(outputfol,"prod.csv"))
+# Load prod or its derivatives
+
+if(!file.exists(paste0(outputfol,"prod_o1.csv")) | !file.exists(paste0(outputfol,"prod_gentot.csv"))){
+  prod = read_csv(file = paste0(outputfol,"prod.csv"))
+}
+
+if(!file.exists(paste0(outputfol,"prod_o1.csv"))){
+  prod_o1 = prod %>%
+    filter(scenario == "o1") 
+  write_csv(prod_o1,paste0(outputfol,"prod_o1.csv"))
+} else {
+  prod_o1 = read_csv(file = paste0(outputfol,"prod_o1.csv"))
+}
+
+if(!file.exists(paste0(outputfol,"prod_gentot.csv"))){
+  prod_gen = prod %>% 
+    mutate(gen_group = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
+    group_by(gen_group,scenario) %>%
+    summarise(totgen = sum(MWout))
+  write_csv(prod_gen, paste0(outputfol,"prod_gentot.csv"))
+} else {
+  prod_gen = read_csv(file = paste0(outputfol,"prod_gentot.csv"))
+}
+
+# memory cleanup
+if(exists("prod")){
+  rm(prod)
+}
 ```
-**NEXT: recompile production data with the correct overlap between periods...**
+<!-- **NEXT: recompile production data with the correct overlap between periods...** -->
+<!-- I think I did this -->
 
 #Production levels by generator type
-Sum production by generator and average by scenario to find production levels by generator type.
+<!-- Sum production by generator and average by scenario to find production levels by generator type. -->
+<!-- setup -->
+<!-- This part doesnt work right and produces a result where Nuclear is much too high.
 ```{r eval=FALSE, include=FALSE}
-# DOESNT WORK
 # sum production data by generator & scenaro
 prod_bygen = prod %>%
   group_by(GEN_IND, scenario) %>%
@@ -52,7 +81,6 @@ prod_bygen$pct_prod = round(prod_bygen$mean_totgen/allgen,6)
 ```
 
 ```{r eval=FALSE, include=FALSE}
-#DOESNT WORK
 # group gas plants together
 prod_gengroup = prod_bygen %>%
   mutate(gen_group = str_split(gen_type,"_",simplify=T)[,1]) %>%
@@ -61,8 +89,8 @@ prod_gengroup = prod_bygen %>%
             pct_prod = 100*mean_totgen_group/sum(prod_bygen$mean_totgen))
 # print(prod_gengroup[,c(1,3)])
 ```
+
 ```{r eval=FALSE, include=FALSE}
-#DOESNT WORK
 ggplot(prod_gengroup,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
   theme_bw() + 
   scale_y_continuous(labels=scales::percent) +
@@ -73,9 +101,6 @@ ggplot(prod_gengroup,aes(y=pct_prod/100,x=gen_group)) + geom_col() +
 <!-- Nuclear generation is off the charts! why is this?? Is scenario aggregation to blame? Just pick one... -->
 
 ```{r}
-prod_o1 = prod %>%
-  filter(scenario == "o1") 
-
 prod_o1gen = prod_o1 %>%
   mutate(gen_group = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
   group_by(gen_group) %>%
@@ -91,9 +116,8 @@ ggplot(prod_o1gen,aes(y=pct_prod/100,x=gen_group)) + geom_col() +
   geom_text(aes(label = round(pct_prod/100,5)), vjust = -0.4)
 ```
 <!-- Ah, that looks better. Why was the other version so different? -->
-Checking how results change across scenarios
-
-```{r}
+<!-- 
+```{r eval = FALSE}
 prod_o20 = prod %>%
   filter(scenario == "o20") 
 
@@ -104,22 +128,19 @@ prod_o20gen = prod_o20 %>%
             pct_prod = 100*totgen/sum(prod_o1$MWout))
 # print(prod_o20gen)
 ```
-```{r echo=FALSE}
+```{r eval=FALSE echo=FALSE}
 ggplot(prod_o20gen,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
   theme_bw() + 
   scale_y_continuous(labels=scales::percent) +
   labs(x = "Generation Type", y = "Percent of energy supplied", title = "Generation Breakdown: ERCOT 2016, no DR, scenario o20") +
   geom_text(aes(label = round(pct_prod/100,5)), vjust = -0.4)
 ```
+-->
+Results are not that different between scenarios
 
 
 full-scenario aggregation
 ```{r}
-prod_gen = prod %>% 
-  mutate(gen_group = str_split(GEN_IND,"-|_",simplify=T)[,1]) %>%
-  group_by(gen_group,scenario) %>%
-  summarise(totgen = sum(MWout))
-
 prod_genmean = prod_gen %>%
   group_by(gen_group) %>%
   summarise(meangen = mean(totgen))
@@ -128,13 +149,11 @@ prod_genmean$pct_prod = 100*prod_genmean$meangen/allgen
 
 # print(prod_genmean)
 ```
-
-Ah that checks out. Better. wonder what was up before...
 ```{r echo=FALSE}
 ggplot(prod_genmean,aes(y=pct_prod/100,x=gen_group)) + geom_col() + 
   theme_bw() + 
   scale_y_continuous(labels=scales::percent) +
-  labs(x = "Generation Type", y = "Percent of energy supplied", title = "Generation Breakdown: ERCOT 2016, no DR") +
+  labs(x = "Generation Type", y = "Percent of energy supplied", title = "Generation Breakdown: ERCOT 2016, no DR, all scenarios") +
   geom_text(aes(label = round(pct_prod/100,4)), vjust = -0.4)
 ```
 
@@ -175,6 +194,7 @@ prod_margprice = prod2_o1 %>%
             marggen = GEN_IND[which.max(VCost)],
             marggencap = Capacity[which.max(VCost)],
             marggenspd = speed[which.max(VCost)])
+write_csv(prod_margprice,paste0(outputfol,"prod_margprice_o1.csv"))
 ```
 
 Modeled marginal cost:
@@ -272,6 +292,7 @@ ggplot(plotdf, aes(x=t)) +
                                "Solar" = "yellow",
                                "Gas" = "red", "Coal" = "black",
                                "Nuclear" = "orange", "Hydro" = "blue")) 
+# NB: in future can use geom_area() to create this type of plot, with fill specified in aesthetics
 ```
 
 ```{r echo=FALSE}
@@ -292,6 +313,7 @@ ggplot(plotdf, aes(x=t)) +
                                "Solar" = "yellow",
                                "Gas" = "red", "Coal" = "black",
                                "Nuclear" = "orange", "Hydro" = "blue")) 
+# NB: in future can use geom_area() to create this type of plot, with fill specified in aesthetics
 ```
 
 ```{r echo=FALSE}
@@ -313,6 +335,7 @@ ggplot(plotdf, aes(x=t)) +
                                "Solar" = "yellow",
                                "Gas" = "red", "Coal" = "black",
                                "Nuclear" = "orange", "Hydro" = "blue")) 
+# NB: in future can use geom_area() to create this type of plot, with fill specified in aesthetics
 ```
 
 # price stats
@@ -334,6 +357,15 @@ What about the effect of transmission constraints on local prices? to attempt to
 ggplot(medprice, aes(x=medprice)) + geom_histogram(binwidth = 3) + 
   scale_x_continuous(limits = c(0,100)) +
   theme_bw() + labs(title = "Distribution of historical median price")
+```
+To make clear the contrast, here's the plot of the distribution of the marginal price as modeled:
+Modeled marginal cost:
+```{r echo=FALSE}
+  ggplot(prod_margprice,aes(x=margprice, fill=marggenspd)) + geom_histogram(binwidth = 3) + 
+    scale_fill_viridis(discrete=T) + 
+    theme_bw() +
+    labs(x = "Marginal Price", y = "Number of hours", title = "Distribution of marginal price by generator speed")
+    # ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)
 ```
 
 # What does historical supply curve look like?

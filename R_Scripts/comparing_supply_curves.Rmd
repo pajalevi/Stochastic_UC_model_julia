@@ -1,0 +1,216 @@
+---
+title: "Comparing_supply_curves"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+August 14th, 2019
+Patricia Levi
+Compare observed supply curves in historical ERCOT data as well as in my modeled data.
+```{r}
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(viridis)
+library(gridExtra)
+knitr::opts_chunk$set(echo = FALSE) 
+
+base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
+input_fol = "Data/julia_input/"
+default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
+```
+# What does historical supply curve look like?
+```{r include=FALSE}
+demand = read_csv(file = paste0(default_in_fol,"ercot_demand_2016.csv"))
+demand$Date = mdy_hm(demand$time_CST, tz="US/Central")
+
+supplycurve = merge(demand, medprice, by="Date")
+```
+
+
+```{r include=FALSE}
+# load and prep input supply curve data for plotting
+# Taken from ercot_gen_inspection.R
+
+dataout = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/"
+# gendat = read.csv(file = paste0(dataout,"unformatted data/all_cols_complete_generator_listing_ERCOT_012019.csv"))
+gendat = read.csv(file = paste0(dataout,"julia_input/ercot_default/complete_generator_correctedGas_3-12-19_alldata.csv"))
+plotsfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/plots/ERCOT_data/"
+# plot cumulative supply ####
+# REMOVE DR
+DRsel = gendat$Fuel == "DR"
+gendat1 = gendat
+gendat = gendat1[!DRsel,]
+
+ordered = order(gendat[,"VCost"]) # gives the indices of VCost in ascending value
+sorted = gendat[,"Capacity"][ordered]
+cumsorted = cumsum(sorted)
+plotdf <- data.frame(x=cumsorted, 
+                     cost=gendat[,"VCost"][ordered],
+                     totcost = (gendat[,"VCost"][ordered] + gendat[,"StartCost"][ordered]/264)/1e3, #spread startup costs over 264 hours for full_test
+                     Technology=gendat[,"Fuel"][ordered],
+                     cap = gendat[,"Capacity"][ordered],
+                     GENID = gendat[,"plantUnique"][ordered])
+plotdf$loc <- cumsum(plotdf$cap) - plotdf$cap/2
+plotdf$cost[which(plotdf$cost==0)] = -0.001
+
+```
+
+```{r}
+# find total production by time - approximate with scenario for now
+# totdemand = prod_o1 %>%
+#   group_by(t) %>%
+#   summarise(dem = sum(MWout))
+# medprice$t = 24*yday(medprice$Date) + hour(medprice$Date) - 23
+# supplycurve = merge(totdemand, medprice, by="t")
+ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Demand", y = "Median Price", title = "Historical demand and median price") +
+  theme_bw()
+```
+Zoom ...
+```{r}
+ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
+  coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Demand", y = "Median Price", title = "Zoom - Historical demand and median price")+
+  theme_bw()
+```
+
+# What does modeled supply curve look like?
+Examining baseline run from May 2nd
+```{r include=FALSE}
+# get total demand in o1 - could probably be done faster with vdem files...
+prod_o1 = read_csv(file = paste0(base_fol,"Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/","prod_o1.csv"))
+
+totdemand = prod_o1 %>%
+  group_by(t) %>%
+  summarise(dem = sum(MWout))
+rm(prod_o1)
+# NB: totdemand is missing first 4 hours and also last few hours of year.
+
+prod_margprice_o1 = read_csv(file = paste0(base_fol,"Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/","prod_margprice_o1.csv"))
+# from fullyear_baseline_analysis.Rmd
+
+prod_margprice_o1 = merge(prod_margprice_o1, totdemand, by = "t", all.x = T)
+
+```
+
+```{r}
+ggplot(prod_margprice_o1,aes(x=dem, y=margprice)) + geom_point(size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Modeled Demand", y = "Marginal generator cost", title = "Observed supply curve") +
+  theme_bw()
+```
+
+# side by side
+<!-- https://sebastiansauer.github.io/two-plots-rmd/ -->
+```{r eval=FALSE, include=FALSE}
+p1 = ggplot(prod_margprice_o1,aes(x=dem, y=margprice)) + geom_point(size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Modeled Demand", y = "Marginal generator cost", title = "Modeled supply curve") +
+  coord_cartesian(ylim = c(0,100), xlim = c(20000,80000)) +
+  theme_bw()
+p2 = ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
+  coord_cartesian(ylim = c(0,100), xlim = c(20000,80000)) +
+  labs(x = "Demand", y = "Median Price", title = "Zoom - Historical supply curve")+
+  theme_bw()
+grid.arrange(p1, p2, ncol = 1)
+```
+```{r}
+p1 = ggplot(prod_margprice_o1,aes(x=dem, y=margprice)) + geom_point(size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Modeled Demand", y = "Marginal generator cost ($/MWh)", title = "Modeled supply curve") +
+  geom_line(aes(x=loc,y=cost),plotdf[!DRsel,], color = "red") +
+  coord_cartesian(ylim = c(0,100)) +
+  theme_bw()
+p2 = ggplot(supplycurve,aes(x=demand, y=medprice)) + geom_point(size = 0.01) +
+  geom_line(aes(x=loc,y=cost),plotdf[!DRsel,], color = "red") +
+  coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Demand", y = "Median Price ($/MWh)", title = "Zoom - Historical supply curve")+
+  theme_bw()
+grid.arrange(p1, p2, ncol = 2)
+```
+
+
+
+```{r}
+  # testing just a line on top of generator supply curve
+# ggplot(plotdf[!DRsel,], aes(x=loc,y=cost,width=cap)) + 
+#   #  geom_point(aes(color=Technology)) +
+#   #  geom_bar(binwidth = 0,aes(fill=Technology), stat="identity", position="identity") +
+#   geom_bar(stat="identity") +
+#   geom_line() +
+#   labs(x="Cumulative Capacity (MW)",y="Variable Cost ($/MWh)") + 
+#   ggtitle(paste("Texas' Electriciy Supply Curve: 2016")) + 
+#   theme(legend.position = "bottom") #+ 
+
+# combined plot
+ggplot() + 
+  geom_line(aes(x=loc,y=cost),plotdf[!DRsel,], color = "red") +
+  geom_point(aes(x=dem, y = margprice),prod_margprice_o1, size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Modeled Demand", y = "Marginal generator cost", title = "Input supply curve + simulated supply curve") +
+  coord_cartesian(ylim = c(0,100)) +
+  theme_bw()
+  
+```
+
+```{r}
+# compare with simulation
+ggplot() + 
+  geom_line(aes(x=loc,y=cost),plotdf[!DRsel,], color = "red") +
+  geom_point(aes(x=demand, y = medprice),supplycurve, size = 0.01) +
+  # coord_cartesian(ylim = c(0,100)) +
+  labs(x = "Demand", y = "Marginal generator cost", title = "Input supply curve + historical supply curve") +
+  coord_cartesian(ylim = c(0,115)) +
+  theme_bw()
+
+```
+
+# examine dual variable of supply=demand
+Compare shadow price of constraint (in o1) to demand level (o1) and to the marginal generator cost (o1)....
+```{r message=FALSE}
+demanddual = read_csv(file = paste0(outputfol,"demanddual.csv"))
+# dim(demanddual)
+nscenarios = 25
+demdf = merge(totdemand,demanddual, by = "t")
+```
+
+```{r}
+ggplot() + 
+  geom_point(aes(x=dem, y = x1*nscenarios),demdf, size = 0.01) +
+  geom_line(aes(x=loc,y=cost),plotdf[!DRsel,], color = "red") +
+  coord_cartesian(ylim = c(0,115)) +
+  labs(x = "Demand", y = "Marginal generator cost", title = "Input supply curve + dual values of supply-demand") +
+  # coord_cartesian(ylim = c(0,100)) +
+  theme_bw()
+```
+
+```{r}
+p3 = ggplot(demdf,aes(x=dem, y = x1*nscenarios)) + 
+  coord_cartesian(ylim = c(0,100)) +
+  geom_point(size = 0.01) + 
+  geom_line(aes(x=loc,y=cost),plotdf[!DRsel,], color = "red") +
+  labs(x="Demand MW", y = "Shadow price of supply>=demand", title = "Shadow price of supply >= demand") +
+  theme_bw()
+
+grid.arrange(p2,p3,ncol = 2)
+```
+The dual variable of supply = demand looks much more like we might expect.
+
+How does the dual variable compare in terms of distribution?
+```{r}
+h1 = ggplot(demdf, aes(x=x1*nscenarios)) + geom_histogram(binwidth = 5) +
+  coord_cartesian(xlim = c(-10,200)) +
+  labs(title = "Simulated price", x = "") +
+  theme_bw()
+h2 = ggplot(supplycurve,aes(x=medprice)) + geom_histogram(binwidth = 5) +
+  coord_cartesian(xlim = c(-10,200)) +
+  labs(title = "Historical price", x = "$/MWh")+
+  theme_bw()
+grid.arrange(h1,h2,ncol = 1)
+```
+

@@ -67,6 +67,18 @@ ggplot(plotdf[!DRsel,], aes(x=loc,y=cost,width=cap,fill=speed)) +
   # scale_x_continuous(limits=c(-10, 37500)) 
   ggsave(file = paste0(plotsfol,"supplycurve_ercot_speed_IAEEmodel.png"), width = 9, height = 4.55)
 
+
+  # testing just a line on top of generator supply curve
+ggplot(plotdf[!DRsel,], aes(x=loc,y=cost,width=cap)) + 
+  #  geom_point(aes(color=Technology)) +
+  #  geom_bar(binwidth = 0,aes(fill=Technology), stat="identity", position="identity") +
+  geom_bar(stat="identity") +
+  geom_line() +
+  labs(x="Cumulative Capacity (MW)",y="Variable Cost ($/MWh)") + 
+  ggtitle(paste("Texas' Electriciy Supply Curve: 2016")) + 
+  theme(legend.position = "bottom") #+ 
+
+  
   
   cbbPalette <- c( "purple", #biomass
                    "black", #coal
@@ -87,11 +99,11 @@ ggplot(plotdf, aes(x=loc,y=cost,width=cap,fill=Technology)) +
   #  geom_point(aes(color=Technology)) +
   #  geom_bar(binwidth = 0,aes(fill=Technology), stat="identity", position="identity") +
   geom_bar(stat="identity") +
-  scale_fill_manual(values=cbbPalette, name = "Generator Type", labels = c("Biomass","Coal","Unknown Gas","Gas Combined Cycle",
-                                                                           "Gas Combustion Turbine","Gas Internal Combustion Engine",
-                                                                           "Gas Steam Turbine","Hydro","Landfill Gas","Nuclear",
-                                                                           "Oil-fired","Solar","Wind")) +
-  # scale_fill_brewer(type = "qual", palette = "Paired")+
+  # scale_fill_manual(values=cbbPalette, name = "Generator Type", labels = c("Biomass","Coal","Unknown Gas","Gas Combined Cycle",
+  #                                                                          "Gas Combustion Turbine","Gas Internal Combustion Engine",
+  #                                                                          "Gas Steam Turbine","Hydro","Landfill Gas","Nuclear",
+  #                                                                          "Oil-fired","Solar","Wind")) +
+  scale_fill_brewer(type = "qual", palette = "Paired")+
   labs(x="Cumulative Capacity (MW)",y="Variable Cost ($/MWh)") + 
   ggtitle(paste("Texas' Electriciy Supply Curve: 2016")) + 
   theme(legend.position = "bottom") #+ 
