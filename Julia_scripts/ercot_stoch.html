@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<!-- saved from url=(0014)about:internet -->
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=9" >
+
+<title>solves the full universe version of a stochastic two stage</title>
+
+<style type="text/css">
+body, td {
+   font-family: sans-serif;
+   background-color: white;
+   font-size: 12px;
+   margin: 8px;
+}
+
+tt, code, pre {
+   font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace;
+}
+
+h1 { 
+   font-size:2.2em; 
+}
+
+h2 { 
+   font-size:1.8em; 
+}
+
+h3 { 
+   font-size:1.4em; 
+}
+
+h4 { 
+   font-size:1.0em; 
+}
+
+h5 { 
+   font-size:0.9em; 
+}
+
+h6 { 
+   font-size:0.8em; 
+}
+
+a:visited {
+   color: rgb(50%, 0%, 50%);
+}
+
+pre {	
+   margin-top: 0;
+   max-width: 95%;
+   border: 1px solid #ccc;
+   white-space: pre-wrap;
+}
+
+pre code {
+   display: block; padding: 0.5em;
+}
+
+code.r, code.cpp {
+   background-color: #F8F8F8;
+}
+
+table, td, th {
+  border: none;
+}
+
+blockquote {
+   color:#666666;
+   margin:0;
+   padding-left: 1em;
+   border-left: 0.5em #EEE solid;
+}
+
+hr {
+   height: 0px;
+   border-bottom: none;
+   border-top-width: thin;
+   border-top-style: dotted;
+   border-top-color: #999999;
+}
+
+@media print {
+   * { 
+      background: transparent !important; 
+      color: black !important; 
+      filter:none !important; 
+      -ms-filter: none !important; 
+   }
+
+   body { 
+      font-size:12pt; 
+      max-width:100%; 
+   }
+       
+   a, a:visited { 
+      text-decoration: underline; 
+   }
+
+   hr { 
+      visibility: hidden;
+      page-break-before: always;
+   }
+
+   pre, blockquote { 
+      padding-right: 1em; 
+      page-break-inside: avoid; 
+   }
+
+   tr, img { 
+      page-break-inside: avoid; 
+   }
+
+   img { 
+      max-width: 100% !important; 
+   }
+
+   @page :left { 
+      margin: 15mm 20mm 15mm 10mm; 
+   }
+     
+   @page :right { 
+      margin: 15mm 10mm 15mm 20mm; 
+   }
+
+   p, h2, h3 { 
+      orphans: 3; widows: 3; 
+   }
+
+   h2, h3 { 
+      page-break-after: avoid; 
+   }
+}
+
+</style>
+
+
+
+
+
+</head>
+
+<body>
+<p># full_universe_stoch.jl</p>
+
+<h1>solves the full universe version of a stochastic two stage</h1>
+
+<h1>unit-commitment model in which slow generators are committed in the</h1>
+
+<h1>first stage and fast generators can be committed in real time.</h1>
+
+<h1>Demand response functions as a slow generator with an advance commmitment</h1>
+
+<h1>not only of startup but also to a generation schedule</h1>
+
+<h1>The only uncertainty modeled is that of the actual DR generation</h1>
+
+<h1>The availability of DR can be restricted by the last four command line args</h1>
+
+<h1>cmd line format should be:</h1>
+
+<h1>include(&ldquo;full_universe_stoch.jl&rdquo;) <date> <inputs_file_name> <multi-runTF> <period_name></h1>
+
+<p>#</p>
+
+<h1>last four are &ldquo;0&rdquo; if switch is not used</h1>
+
+<h1>Written under Julia 0.6.4</h1>
+
+<h1>Patricia Levi</h1>
+
+<h1><a href="mailto:pjlevi@stanford.edu">pjlevi@stanford.edu</a></h1>
+
+<h1>NOV 2018</h1>
+
+<h1>TODO &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h1>TRIPLECHECK UNITS - MW VS GW</h1>
+
+<h1>X change filepath for output writing</h1>
+
+<h1>X &mdash;&ndash; change file structure in sherlock to match below</h1>
+
+<h1>X &mdash;&ndash; file structure: home folder(outputs(output ID), inputs(base, timeseriesID))</h1>
+
+<h1>X better file org for scenario input files</h1>
+
+<h1>X check if output folder exists before creating it</h1>
+
+<h1>X set up tests for runtime on sherlock (different # time periods, omegas)</h1>
+
+<h1>think about benders, binary relaxation, how to reduce problem size</h1>
+
+<h1>develop better way to differentiate between slow and fast generators</h1>
+
+<h1>papavasiliou denotes any generator &lt;300 MW(?) as fast, all others slow</h1>
+
+<h1>look at output to sanity check.</h1>
+
+<h1>graph output levels along with demand levels</h1>
+
+<h1>look at marginal prices over time (cannot just look at shadow price</h1>
+
+<h1>because the binary problem means theres no useful dual variable.</h1>
+
+<h1>Instead I can look at the max price of dispatched generators at</h1>
+
+<h1>each timestep)</h1>
+
+<h1>X make sherlock = true an argument that can be passed in when calling file</h1>
+
+<h1>X make debug switch that can be used to run everything up to model solve</h1>
+
+<h1>&#39;keep&#39; does not seem to work for Julia 1.0</h1>
+
+<h1>upgrade code to Julia 0.7 (which has depracation warnings for 1.0)</h1>
+
+<h1>X upload newest version with submission scripts to sherlock</h1>
+
+<h1>save workspace to output folder using JLD2</h1>
+
+<h1>save probabilities and characteristics of new scenarios in output folder</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h3>Packages</h3>
+
+<p>using JuMP
+#using Clp
+using Gurobi
+using DataFrames
+using CSV
+using JLD2
+include(&ldquo;convert3dto2d.jl&rdquo;)
+include(&ldquo;make_scenarios.jl&rdquo;)
+include(&ldquo;writecsvmulti.jl&rdquo;)</p>
+
+<p>test = Gurobi.Env() # test that gurobi is working</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>USER CONTROLS &amp; CMD LINE ARGS</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>USER PARAMS</h1>
+
+<p>no_vars = false #stops execution before making variables</p>
+
+<h1>debug = true  # stops execution before solving model</h1>
+
+<p>sherlock_fol = &ldquo;/home/users/pjlevi/dr_stoch_uc/julia_ver/&rdquo;
+sherlock_input_file = &ldquo;inputs/&rdquo;
+sherlock_output_file = &ldquo;outputs/&rdquo;
+sherlock_params_fol = &ldquo;code/&rdquo;
+laptop_fol = &ldquo;/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/&rdquo;
+laptop_input_file = &ldquo;Data/julia_input/&rdquo;
+laptop_output_file = &ldquo;Data/julia_output/&rdquo;
+laptop_params_fol = &ldquo;Julia_UC_Github/Julia_scripts/&rdquo;</p>
+
+<h2>VIRGINIA DATASET</h2>
+
+<h1>slow_gens = [&ldquo;HYDRO&rdquo;,</h1>
+
+<h1>&ldquo;COAL&rdquo;,&ldquo;NUCLEAR&rdquo;,&ldquo;DR&rdquo;, &ldquo;MUNICIPAL_SOLID_WASTE&rdquo;,&ldquo;LANDFILL_GAS&rdquo;,</h1>
+
+<h1>&ldquo;BIOMASS&rdquo;,&ldquo;GAS&rdquo;,&ldquo;GAS_CC&rdquo;,</h1>
+
+<h1>&ldquo;IMPORT_COAL&rdquo;,&ldquo;IMPORT_GAS&rdquo;]</h1>
+
+<h1># NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed</h1>
+
+<h1>fast_gens = [&ldquo;GAS_CT&rdquo;,&ldquo;OIL&rdquo;,&ldquo;SOLAR&rdquo;,&ldquo;WIND&rdquo;,&ldquo;IMPORT_HYDRO&rdquo;]</h1>
+
+<h1>dr_gens = [&ldquo;DR&rdquo;]</h1>
+
+<h1>notdr_gens = [&ldquo;COAL&rdquo;,&ldquo;NUCLEAR&rdquo;, &ldquo;MUNICIPAL_SOLID_WASTE&rdquo;,&ldquo;LANDFILL_GAS&rdquo;,</h1>
+
+<h1>&ldquo;BIOMASS&rdquo;,&ldquo;GAS&rdquo;,&ldquo;GAS_CC&rdquo;,</h1>
+
+<h1>&ldquo;IMPORT_COAL&rdquo;,&ldquo;IMPORT_GAS&rdquo;,</h1>
+
+<h1>&ldquo;HYDRO&rdquo;,&ldquo;GAS_CT&rdquo;,&ldquo;OIL&rdquo;,&ldquo;SOLAR&rdquo;,&ldquo;WIND&rdquo;,&ldquo;IMPORT_HYDRO&rdquo;]</h1>
+
+<h2>ERCOT DATASET</h2>
+
+<h2>DR is added to slow/fast categories depending on value of</h2>
+
+<h2>DRtype (in inputs csv)</h2>
+
+<p>slow_gens = [&ldquo;HYDRO&rdquo;,
+            &ldquo;COAL&rdquo;,&ldquo;NUCLEAR&rdquo;,&ldquo;LANDFILL_GAS&rdquo;,
+            &ldquo;BIOMASS&rdquo;,&ldquo;GAS&rdquo;,&ldquo;GAS_CC&rdquo;]
+            # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
+fast_gens = [&ldquo;GAS_CT&rdquo;,&ldquo;GAS_ICE&rdquo;,&ldquo;OIL&rdquo;,&ldquo;SOLAR&rdquo;,&ldquo;WIND&rdquo;,&ldquo;GAS_ST&rdquo;]
+dr_gens = [&ldquo;DR&rdquo;]
+notdr_gens = [&ldquo;BIOMASS&rdquo;,&ldquo;COAL&rdquo;,&ldquo;GAS&rdquo;,&ldquo;GAS_CC&rdquo;,&ldquo;GAS_CT&rdquo;,&ldquo;GAS_ICE&rdquo;,&ldquo;GAS_ST&rdquo;,&ldquo;HYDRO&rdquo;,
+            &ldquo;LANDFILL_GAS&rdquo;,&ldquo;NUCLEAR&rdquo;,&ldquo;OIL&rdquo;,&ldquo;SOLAR&rdquo;,&ldquo;WIND&rdquo;    ]</p>
+
+<p>####### END USER CONTROLS ##########</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h1>FILEPATH SETUP</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<p>if split(pwd(),&ldquo;/&rdquo;)[2] == &ldquo;Users&rdquo;
+    Sherlock = false
+else
+    Sherlock = true # on sherlock? where are folders?
+end
+@show Sherlock</p>
+
+<p>if Sherlock
+    base_fol = sherlock_fol
+    input_fol = string(sherlock_fol,sherlock_input_file)
+    params_fol = string(sherlock_fol, sherlock_params_fol)
+else
+    base_fol = laptop_fol
+    input_fol = string(laptop_fol,laptop_input_file)
+    params_fol = string(laptop_fol, laptop_params_fol)
+end
+default_data_fol = string(input_fol,&ldquo;ercot_default/&rdquo;)</p>
+
+<h1>PARSE CMD LINE ARGS</h1>
+
+<p>ARGNAMES = [&ldquo;date&rdquo; ,&ldquo;inputs_file_name&rdquo;,&ldquo;input_verion&rdquo; ,&ldquo;multi-runTF&rdquo;, &ldquo;period_name&rdquo; ]
+defaultARGS = [Dates.format(Dates.now(),&ldquo;Y-m-d&rdquo;),&ldquo;inputs_ercot.csv&rdquo;,&ldquo;tiny&rdquo;,&ldquo;true&rdquo;,&ldquo;periods_1_5353_5400.csv&rdquo;]
+localARGS = length(ARGS) &gt; 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
+nargs = length(localARGS)
+@show localARGS</p>
+
+<p>if nargs == 5
+    submitdate = localARGS[1]
+    input_file_name = localARGS[2]
+    input_version = localARGS[3]
+    multiTF = parse(Bool,lowercase(localARGS[4]))
+    periodID = localARGS[5]</p>
+
+<h1>elseif nargs == 3</h1>
+
+<h1>submitdate = localARGS[1]</h1>
+
+<h1>input_file_name = localARGS[2]</h1>
+
+<h1>multiTF = parse(Bool,lowercase(localARGS[3]))</h1>
+
+<h1>if !multiTF</h1>
+
+<h1>error(&ldquo;If doing a multi-period run, need period ID&rdquo;)</h1>
+
+<h1>end</h1>
+
+<p>elseif nargs &gt; 5
+    error(string(&ldquo;Too many arguments supplied. Need &rdquo;,join(ARGNAMES[1,:],&ldquo; &rdquo;)))
+elseif nargs &lt;5
+    warn(&ldquo;not enough arguments supplied. Need &rdquo;, join(ARGNAMES[1,:],&ldquo; &rdquo;))
+end</p>
+
+<p>read_inputs = CSV.read(string(params_fol,input_file_name))
+read_inputs = read_inputs[:,[:input_name, Symbol(input_version)]]</p>
+
+<h1>add cmd line args to read_inputs file</h1>
+
+<p>newdf = DataFrame(input_name = ARGNAMES[1:length(localARGS)], args = localARGS)
+names!(newdf.colindex,map(parse,[&ldquo;input_name&rdquo;,input_version]))
+read_inputs = vcat(read_inputs, newdf)
+@show read_inputs</p>
+
+<h1>~ transpose read_inputs so that values can be referenced by name</h1>
+
+<p>read_inputs[:,:rowkey] = 1
+inputs = unstack(read_inputs,:rowkey, :input_name, Symbol(input_version))</p>
+
+<h1>parse out non-string inputs</h1>
+
+<p>startlim = parse(Float64,inputs[1,:startlim])
+hourlim = parse(Float64,inputs[1,:hourlim])
+energylim = parse(Float64,inputs[1,:energylim])
+ramplims = parse(Float64,inputs[1,:ramplims])
+dr_override = parse(Bool,lowercase(inputs[1,:dr_override]))
+dr_varcost = parse(Float64,inputs[1,:dr_varcost])
+randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
+trueBinaryStartup = parse(Bool,lowercase(inputs[1,:trueBinaryStartup]))
+DRtype = parse(Int64,inputs[1,:DRtype])
+nrandp = parse(Int64,inputs[1,:nrandp])
+int_length = parse(Int64,inputs[1,:intlength])
+debug = !parse(Bool, lowercase(inputs[1,:solve_model]))</p>
+
+<p>if Sherlock
+    output<em>fol = string(sherlock_fol, sherlock_output_file, input_version,&ldquo;</em>&rdquo;,submitdate,&ldquo;/&rdquo;)
+else
+    output<em>fol = string(laptop_fol, laptop_output_file, input_version,&ldquo;</em>&rdquo;,submitdate,&ldquo;/&rdquo;)
+end
+subsel_data_fol = string(input_fol,inputs[1,:timeseriesID],&ldquo;/&rdquo;)</p>
+
+<h1>setup unique ID for period identification in output</h1>
+
+<p>if multiTF
+    pbits = split(periodID,r&quot;<em>|.|-&ldquo;)
+    periodnum = pbits[2]
+    periodfirst = pbits[3]
+    periodlast = pbits[4]
+    periodsave = string(&quot;p&rdquo;,periodnum,&ldquo;</em>&rdquo;,periodfirst,&ldquo;_&rdquo;,periodlast)
+end</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h3>TIME PERIOD DATA</h3>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>first<em>periods = CSV.read(string(subsel_data_fol,&ldquo;first_periods</em>&rdquo;,inputs[1,:timeseriesID],&ldquo;.csv&rdquo;),datarow=1)[1]</h1>
+
+<h1>notfirst<em>periods = CSV.read(string(subsel_data_fol,&ldquo;notfirst_periods</em>&rdquo;,inputs[1,:timeseriesID],&ldquo;.csv&rdquo;),datarow=1)[1]</h1>
+
+<p>if multiTF
+    hours = CSV.read(string(subsel<em>data_fol,periodID),datarow=1,types=[Int])[1]
+else
+    hours = CSV.read(string(subsel_data_fol,&ldquo;periods</em>&rdquo;,timeseriesID,&ldquo;.csv&rdquo;),datarow=1,types=[Int])[1]
+end
+n_days = convert(Int32,ceil(length(hours)/24))
+n_periods = length(hours)</p>
+
+<h1>convert first and notfirst periods to indices</h1>
+
+<p>t_firsts = 1
+t_notfirst = collect(2:length(hours))</p>
+
+<p>dem2 = CSV.read(string(default_data_fol, inputs[1,:demandFile]),datarow=2,missingstring=&ldquo;NA&rdquo;)</p>
+
+<h1>subselect for just the rows corresponding to &#39;hours&#39;</h1>
+
+<p>dem = dem2[hours,2]</p>
+
+<h1>check that t_firsts fall on multiples of 24+1</h1>
+
+<h1>ie that each period encompasses entire days</h1>
+
+<h1>because this simplifies computation later on</h1>
+
+<h1>for i in 1:length(t_firsts)</h1>
+
+<h1>if rem(t_firsts[i],24) != 1</h1>
+
+<h1>error(string(&ldquo;period &rdquo;,i,&ldquo; does not begin at the beginning of a day&rdquo;))</h1>
+
+<h1>end</h1>
+
+<h1>end</h1>
+
+<h1>this gets messed up by daylight savings time</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h1>STOCHASTIC VARIABLE DATA</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>vdr = [0.9,1,1.1]</h1>
+
+<h1>pro = [0.25,0.5,0.25]</h1>
+
+<h1>probs = CSV.read(string(default<em>data_fol , &ldquo;dist_input</em>&rdquo;,stochID,&ldquo;.csv&rdquo;))</h1>
+
+<h1>vdr_in = convert(Array,probs[1,:]) # converts the first row of probs to an Array</h1>
+
+<h1>pro_in = rationalize.(convert(Array,probs[2,:])) #to avoid rounding issues later</h1>
+
+<pre><code># if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
+</code></pre>
+
+<h2>Net Demand uncertainty</h2>
+
+<p>if !isfile(string(subsel<em>data_fol,&ldquo;demandScenarios_vdem&rdquo;,&ldquo;</em>&rdquo;,inputs[1,:stochID],&ldquo;<em>&rdquo;,periodsave,&ldquo;.csv&rdquo;))
+    ndprobs = CSV.read(string(default_data_fol , &ldquo;dist_input</em>&rdquo;,inputs[1,:stochID],&ldquo;_nd.csv&rdquo;))
+    ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
+    ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later</p>
+
+<pre><code>demandScenarios = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nrandp)
+vdem = demandScenarios[1]
+pro = demandScenarios[2]
+writecsvmulti(DataFrame(vdem),subsel_data_fol,string(&quot;demandScenarios_vdem&quot;,&quot;_&quot;,inputs[1,:stochID]),multiTF,periodsave)
+writecsvmulti(DataFrame(pro),subsel_data_fol,string(&quot;demandScenarios_prob&quot;,&quot;_&quot;,inputs[1,:stochID]),multiTF,periodsave)
+</code></pre>
+
+<p>else
+    vdem = convert(Array,CSV.read(string(subsel<em>data_fol,&ldquo;demandScenarios_vdem&rdquo;,&ldquo;</em>&rdquo;,inputs[1,:stochID],&ldquo;<em>&rdquo;,periodsave,&ldquo;.csv&rdquo;)))
+    pro = convert(Array,CSV.read(string(subsel_data_fol,&ldquo;demandScenarios_prob&rdquo;,&ldquo;</em>&rdquo;,inputs[1,:stochID],&ldquo;_&rdquo;,periodsave,&ldquo;.csv&rdquo;)))
+end</p>
+
+<h1>if sum(pro) != 1</h1>
+
+<pre><code># error(&quot;sum of probabilities is not one, it is &quot;, sum(pro))
+</code></pre>
+
+<h1>end</h1>
+
+<p>println(&ldquo;sum of probabilities is &rdquo;, sum(pro))
+n_omega = length(pro) #redefine for new number of scenarios</p>
+
+<h1>to check vdr and p are constructed properly</h1>
+
+<h1>writecsv(&ldquo;vdr_test.csv&rdquo;,vdr)</h1>
+
+<h1>writecsv(&ldquo;p_test.csv&rdquo;,pro&#39;)</h1>
+
+<h1>Set up demand realizations matrix dem_real[t,o]</h1>
+
+<p>dem_real = dem .* vdem</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h1>GENERATOR DATA</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>adjust slow/fast defn based on DRtype</h1>
+
+<p>if DRtype == 1
+    fast_gens = vcat(fast_gens, dr_gens)
+elseif (DRtype == 2) | (DRtype == 3)
+    slow_gens = vcat(slow_gens, dr_gens)
+else
+    error(&ldquo;DRtype must be 1, 2 or 3&rdquo;)
+end</p>
+
+<p>genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring =&ldquo;NA&rdquo;)</p>
+
+<h1>genset[Symbol(&ldquo;Plant Name&rdquo;)] # this is how to access by column name if there are spaces</h1>
+
+<h1>names(genset) # this is how to get the column names</h1>
+
+<h1>anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname</h1>
+
+<h1>how do I select which rows match one of a set of strings?</h1>
+
+<h1>in(&ldquo;c&rdquo;,[&ldquo;a&rdquo;,&ldquo;b&rdquo;,&ldquo;c&rdquo;]) # ask if &ldquo;c&rdquo; is contained in set of interest</h1>
+
+<h1>useful: <a href="https://cbrownley.wordpress.com/2015/07/26/intro-to-julia-filtering-rows-with-r-python-and-julia/">https://cbrownley.wordpress.com/2015/07/26/intro-to-julia-filtering-rows-with-r-python-and-julia/</a></h1>
+
+<h1>data_frame_value_in_set =</h1>
+
+<h1>data_frame[findin(data_frame[:quality], set_of_interest), :]</h1>
+
+<h1>x = [&ldquo;a&rdquo;,&ldquo;b&rdquo;,&ldquo;c&rdquo;]</h1>
+
+<h1>set_interest = [&ldquo;c&rdquo;]# for this to work must have the []</h1>
+
+<h1>findin(x,set_interest)</h1>
+
+<p>dr_ind = findin(genset[:Fuel],dr_gens)
+slow_ind = findin(genset[:Fuel],slow_gens)
+fast_ind = findin(genset[:Fuel],fast_gens)</p>
+
+<p>#generator min and max
+pmin = genset[:PMin]
+pmax = genset[:Capacity]
+startup = genset[:StartCost]
+varcost = genset[:VCost]
+rampmax = genset[:ramprate]</p>
+
+<h1>for manual override of DR variable cost</h1>
+
+<p>if dr_override
+    varcost[dr_ind] = dr_varcost
+end</p>
+
+<h1>Generator PARAMS</h1>
+
+<p>n_gsl= length(slow_ind)# number of slow generators
+n_g =nrow(genset)# number of generators
+n_gf = length(fast_ind)
+n_gdr = length(dr_ind) #number of DR generators
+n_t = n_periods # number of timesteps</p>
+
+<h2>GENERATOR AVAILABILITY</h2>
+
+<p>pf = repeat([1.0], inner = [n_g, n_t])</p>
+
+<h3>Wind and solar</h3>
+
+<h1>load wind, solar info</h1>
+
+<p>solar_avail = CSV.read(string(default_data_fol,&ldquo;solar_availability_factors_2016.csv&rdquo;))
+wind_avail = CSV.read(string(default_data_fol,&ldquo;wind_availability_factors_2016.csv&rdquo;))</p>
+
+<h1>remove last col of each</h1>
+
+<p>solar_avail = solar_avail[:,1:(ncol(solar_avail)-1)]
+wind_avail = wind_avail[:,1:(ncol(wind_avail)-1)]</p>
+
+<h1>loop through all colnames, use findin(genset[:plantUnique],XX) to get row</h1>
+
+<h1>sub in new info</h1>
+
+<p>for i in 1:length(names(solar_avail))
+    col = names(solar_avail)[i]
+    ind = findin(genset[:plantUnique],[convert(String, col)])
+    pf[ind,:] = solar_avail[hours,i]
+end</p>
+
+<p>for i in 1:length(names(wind_avail))
+    col = names(wind_avail)[i]
+    ind = findin(genset[:plantUnique],[convert(String, col)])
+    pf[ind,:] = wind_avail[hours,i]
+end</p>
+
+<h3>Demand Response</h3>
+
+<p>if parse(inputs[1,:availID])!=0
+    dr_avail = CSV.read(string(default_data_fol,inputs[1,:availID],&ldquo;.csv&rdquo;))
+    # remove first col
+    dr_avail = dr_avail[:,2:ncol(dr_avail)]
+    # sub in new info
+    for i in 1:length(names(dr_avail))
+        col = names(dr_avail)[i]
+        ind = findin(genset[:plantUnique],[convert(String, col)])
+        pf[ind,:] = dr_avail[hours,i]
+    end
+end</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h1>MODEL SETUP</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h3>SETS</h3>
+
+<p>TIME = 1:n_t
+SCENARIOS = 1:n_omega
+GENERATORS = 1:n_g #all generators
+GEN_NODR = findin(genset[:Fuel],notdr_gens)
+GF = fast_ind
+GSL = slow_ind #slow generators
+GDR = dr_ind #DR generators</p>
+
+<h1>need an index for where the DR is in the slow generators</h1>
+
+<p>GDR_SL_ind = findin(GSL,GDR)</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h3>MODEL</h3>
+
+<h1>m = Model(solver = ClpSolver())</h1>
+
+<p>m = Model(solver=GurobiSolver(Presolve=0))</p>
+
+<p>if no_vars
+    error(&ldquo;just testing model so we are stopping here&rdquo;)
+else
+    println(&ldquo;begin building model&rdquo;)
+end</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h3>VARIABLES</h3>
+
+<h1>@variable(m, 0 &lt;= x &lt;= 2 )</h1>
+
+<p>@variable(m, z[1:n_gsl,1:n_t]) # slow generator startup
+if trueBinaryStartup
+    @variable(m, w[1:n_gsl,1:n_t], Bin) # slow generator commitment TRUE BINARY
+else
+    @variable(m, 0 &lt;= w[1:n_gsl,1:n_t] &lt;= 1) # slow generator commitment RELAXED BINARY
+end</p>
+
+<p>#real-time commitment, startup
+@variable(m, v[1:n_g,1:n_t,1:n_omega]) # generator startup
+if trueBinaryStartup
+    @variable(m, u[1:n_g,1:n_t,1:n_omega], Bin) # generator commitment TRUE BINARY
+else
+    @variable(m, 0 &lt;= u[1:n_g,1:n_t,1:n_omega] &lt;= 1) # generator commitment RELAXED BINARY
+end</p>
+
+<p>#production variables
+@variable(m, p[1:n_g,1:n_t,1:n_omega] &gt;= 0) #generator production</p>
+
+<h1>if DR requires advance production schedule</h1>
+
+<p>if DRtype == 3
+    @variable(m, p_dr[1:n_gdr, 1:n_t] &gt;= 0) # DR day-ahead production commitment
+end</p>
+
+<h1>track number of startups to determine costs</h1>
+
+<p>@variable(m, start_num[1:n_g, 1:n_t, 1:n_omega] &gt;= 0)</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h3>CONSTRAINTS</h3>
+
+<h1>@constraint(m, 1x + 5y &lt;= 3.0 )</h1>
+
+<p>#SUPPLY-DEMAND
+@constraint(m,supplydemand[t=1:n_t, o=1:n_omega],
+    sum( p[g,t,o] for g=1:n_g) &gt;= dem_real[t,o])
+#DEMAND RAND</p>
+
+<h1>@constraint(m, dem_rand[t=TIME, o = SCENARIOS],</h1>
+
+<h1>dem_real[t,o] = dem[t] * vnd[t,o]) #THIS DOESNT NEED TO BE A CONSTRAINT?</h1>
+
+<p>#GENMIN
+@constraint(m, mingen[g= 1:n_g, t= 1:n_t, o=1:n_omega ],
+    p[g,t,o] &gt;= pmin[g] * u[g,t,o])
+#GENMAX - only for GEN_NODR if dr is random
+@constraint(m,[g = 1:n_g, t = 1:n_t, o=1:n_omega],
+    p[g,t,o] &lt;= pmax[g] * u[g,t,o] * pf[g,t] )</p>
+
+<p>if DRtype == 3
+#GENMAXDR
+    @constraint(m,[g = 1:n_gdr, t = 1:n_t],
+        p_dr[g,t] &lt;= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
+    @constraint(m,type3dr[g=1:n_gdr,t = TIME, o = SCENARIOS],
+         p[GDR[g],t,o] == p_dr[g,t])
+end</p>
+
+<p>#START_S</p>
+
+<h1>@constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],</h1>
+
+<pre><code># z[g,t+1] == w[g,t+1] - w[g,t])
+</code></pre>
+
+<p>@constraint(m,[g = 1:n_gsl, t=t_notfirst],
+    z[g,t] == w[g,t] - w[g,t-1])
+#START_F</p>
+
+<h1>@constraint(m,[g=GENERATORS ,t=1:(n_t-1), o = SCENARIOS],</h1>
+
+<h1>v[g,t+1,o] == u[g,t+1,o] - u[g,t,o])</h1>
+
+<p>@constraint(m,[g=GENERATORS ,t=t_notfirst, o = SCENARIOS],
+    v[g,t,o] == u[g,t,o] - u[g,t-1,o])
+#INIT_S
+@constraint(m,[g=1:n_gsl,t=t_firsts],
+    z[g,t] == w[g,t])
+#INIT_F
+@constraint(m,[g=GENERATORS,t=t_firsts, o = SCENARIOS],
+    v[g,t,o] == u[g,t,o])
+#NAN_ST
+@constraint(m,[g = 1:n_gsl, t = TIME, o = SCENARIOS],
+    v[GSL[g],t,o] == z[g,t])
+#NAN_CM
+@constraint(m,[g = 1:n_gsl, t = TIME, o = SCENARIOS],
+    u[GSL[g],t,o] == w[g,t])</p>
+
+<p>#DR_RAND
+#think carefully about how to index into p and p_dr
+#e.g. need to get from [5,7] for p to [1,2] for p_dr</p>
+
+<h1>one workaround is p[g=GDR,t,o] being its own variable.</h1>
+
+<h1>would need to change SUPPLY-DEMAND, GENMAX, and potentially startup/commitment too,</h1>
+
+<h1>since these rely on the GENERATORS index&hellip;</h1>
+
+<h1>@constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],</h1>
+
+<h1>p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])</h1>
+
+<p>#STARTUP COUNT
+@constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
+    start_num[g,t,o] &gt;= v[g,t,o])</p>
+
+<p>#RAMP RATE -
+if ramplims !=0
+    @constraint(m,ramplim[g=GENERATORS,t=t_notfirst, o = SCENARIOS],
+        p[g,t,o] - p[g,t-1,o] &lt;= (rampmax[g] * pmax[g]))
+end</p>
+
+<h1>&mdash;&mdash; DR USAGE LIMITS</h1>
+
+<h1>Require that each period starts at the beginning of a new day</h1>
+
+<h1>to simplify computation</h1>
+
+<p>#STARTLIM</p>
+
+<h1>number of startups per period</h1>
+
+<p>if startlim !=0
+    # # per day
+    # @constraint(m,[g = 1:n_gdr,d = 1:n_days, o = SCENARIOS],
+    #     sum(v[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) &lt;= startlim)
+    # per period
+    @constraint(m,limstart[g = 1:n_gdr, o = SCENARIOS],
+        sum(start_num[GDR[g],t,o] for t = TIME) &lt;= startlim)
+end
+#uses z, the first stage startup var - corresponds to slow DR</p>
+
+<p>#HOURLIM
+#number of hours used per period
+if hourlim != 0
+    # # per day
+    # @constraint(m,[g = 1:n_gdr,d = 1:n_days, o = SCENARIOS],
+    #     sum(u[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) &lt;= hourlim)
+    # per period
+    @constraint(m,limhrs[g = 1:n_gdr, o = SCENARIOS],
+        sum(u[GDR[g],t,o] for t = TIME) &lt;= hourlim)
+end
+#uses w, the first stage startup var - corresponds to slow DR</p>
+
+<p>#ENERGYLIM</p>
+
+<h1>amount of energy used per period</h1>
+
+<p>if energylim != 0
+    # per day
+    # @constraint(m,[g = 1:n_gdr,d = 1:n_days ,o=SCENARIOS],
+    #     sum(p[GDR[g],t,o] for t = (24*(d-1)+1):(24*d)) &lt;= energylim)
+    # per period
+    @constraint(m,limenergy[g = 1:n_gdr, o=SCENARIOS],
+        sum(p[GDR[g],t,o] for t = TIME) &lt;= energylim)
+end</p>
+
+<h3>OBJECTIVE</h3>
+
+<h1>@objective(m, Max, 5x + 3*y )</h1>
+
+<p>@objective(m, Min, sum(pro[o] *
+    sum(start_num[g,t,o]*startup[g] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
+    for o = SCENARIOS))</p>
+
+<h1>Check model</h1>
+
+<h1>print(m)</h1>
+
+<p>if debug
+    error(&ldquo;just testing model so we are stopping here&rdquo;)
+end</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>SOLVE MODEL</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<p>@printf(&ldquo;\nSolving:\n&rdquo;)
+status = solve(m)
+@printf(&ldquo;Status: %s\n&rdquo;, status)</p>
+
+<p>if !isdir(output_fol)
+    mkdir(output_fol)
+end</p>
+
+<h2>save a copy of inputs &amp; demand scenarios to the output file</h2>
+
+<h1>inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))</h1>
+
+<h1>inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)</h1>
+
+<h1>CSV.write(string(output_fol,&ldquo;run_inputs.csv&rdquo;), inputscsv)</h1>
+
+<p>writecsvmulti(read_inputs,output_fol,&ldquo;inputfile&rdquo;,multiTF,periodsave)</p>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;</h1>
+
+<h1>SAVE OUTPUT</h1>
+
+<h1>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-</h1>
+
+<h1>save workspace: m and certain inputs</h1>
+
+<h1>vdr, pro, pf, varcost, various indices&hellip;</h1>
+
+<h1>try</h1>
+
+<h1>@save string(output_fol,&ldquo;workspace.jld2&rdquo;) m vdr pro p</h1>
+
+<h1>end</h1>
+
+<h1>check production</h1>
+
+<h1>print(&ldquo;schedule of DR&rdquo;)</h1>
+
+<h1>x = getvalue(p)</h1>
+
+<h1>x_df = DataFrame(transpose(x))</h1>
+
+<h1>names!(x_df,[Symbol(&ldquo;$input&rdquo;) for input in genset[:plantUnique]])</h1>
+
+<h1>CSV.write(string(output_fol,&ldquo;production_schedule.csv&rdquo;), x_df)</h1>
+
+<h1>display(x)</h1>
+
+<h1>print(&ldquo;production of DR:&rdquo;)</h1>
+
+<p>y = getvalue(p[GDR,:,:])</p>
+
+<p>y_out = convert3dto2d(y,1, 3,  2,
+    vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;DR_IND&rdquo;,&ldquo;t&rdquo;),
+     genset[dr_ind,:plantUnique])
+writecsvmulti(y_out,output_fol,&ldquo;DR_production&rdquo;,multiTF,periodsave)</p>
+
+<h1>display(y)</h1>
+
+<h1>print(&ldquo;production of slow generators:&rdquo;)</h1>
+
+<p>zs = getvalue(p[GSL,:,:])</p>
+
+<p>y_out = convert3dto2d(zs,1, 3, 2,
+    vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;GEN_IND&rdquo;,&ldquo;t&rdquo;),
+     genset[slow_ind,:plantUnique])
+writecsvmulti(y_out,output_fol,&ldquo;slow_production&rdquo;,multiTF,periodsave)</p>
+
+<h1>display(zs)</h1>
+
+<h1>print(&ldquo;production of fast generators:&rdquo;)</h1>
+
+<p>zf = getvalue(p[GF,:,:])
+y_out = convert3dto2d(zf,1, 3, 2,
+    vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;GEN_IND&rdquo;,&ldquo;t&rdquo;),
+     genset[fast_ind,:plantUnique])
+writecsvmulti(y_out,output_fol,&ldquo;fast_production&rdquo;,multiTF,periodsave)</p>
+
+<h1>display(zf)</h1>
+
+<h1>check commitment</h1>
+
+<h1>print(&ldquo;commitment of slow generators:&rdquo;)</h1>
+
+<h1>display(getvalue(w))</h1>
+
+<p>w_out = getvalue(w)
+wdf = DataFrame(transpose(w_out))
+names!(wdf,[Symbol(&ldquo;$input&rdquo;) for input in genset[slow_ind,:plantUnique]])
+writecsvmulti(wdf,output_fol,&ldquo;slow_commitment&rdquo;,multiTF,periodsave)</p>
+
+<h1>print(&ldquo;startup of slow generators:&rdquo;)</h1>
+
+<p>z_out = getvalue(z)
+zdf = DataFrame(transpose(z_out))
+names!(zdf,[Symbol(&ldquo;$input&rdquo;) for input in genset[slow_ind,:plantUnique]])
+writecsvmulti(zdf,output_fol,&ldquo;slow_startup&rdquo;,multiTF,periodsave)</p>
+
+<h1>display(getvalue(z))</h1>
+
+<h1>print(&ldquo;commitment of all generators&rdquo;)</h1>
+
+<h1>display(getvalue(u))</h1>
+
+<p>u_out = getvalue(u)
+y_out = convert3dto2d(u_out,1, 3, 2,
+    vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;GEN_IND&rdquo;,&ldquo;t&rdquo;),
+     genset[:plantUnique])
+writecsvmulti(y_out,output_fol,&ldquo;u_commitment&rdquo;,multiTF,periodsave)</p>
+
+<h1>print(&ldquo;startup of all generators&rdquo;)</h1>
+
+<h1>display(getvalue(v))</h1>
+
+<p>v_out = getvalue(v)
+y_out = convert3dto2d(v_out,1, 3, 2,
+    vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;GEN_IND&rdquo;,&ldquo;t&rdquo;),
+     genset[:plantUnique])
+writecsvmulti(y_out,output_fol,&ldquo;v_startup&rdquo;,multiTF,periodsave)</p>
+
+<h1>check costs</h1>
+
+<h1>print(&ldquo;total cost&rdquo;)</h1>
+
+<p>totcost = getvalue(sum(pro[o] *
+    sum(start_num[g,t,o]*startup[g] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
+    for o = SCENARIOS))</p>
+
+<h1>display(totcost)</h1>
+
+<h1>print(&ldquo;startup cost&rdquo;)</h1>
+
+<h1>display(&ldquo;text/plain&rdquo;,getvalue(start_cost))</h1>
+
+<h1>print(&ldquo;fraction of total costs that are startup costs&rdquo;)</h1>
+
+<p>totstartupcost = getvalue(sum(pro[o] *
+    sum(start_num[g,t,o]*startup[g] for g = GENERATORS, t = TIME)
+    for o = SCENARIOS))</p>
+
+<h1>display(&ldquo;text/plain&rdquo;,totstartupcost/totcost)</h1>
+
+<h1>print(&ldquo;fraction of total costs that are var cost&rdquo;)</h1>
+
+<p>totvarcost = getvalue(sum(pro[o] *
+    sum(p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
+    for o = SCENARIOS))</p>
+
+<h1>display(&ldquo;text/plain&rdquo;,totvarcost/totcost)</h1>
+
+<p>output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
+                            TotVarCst = totvarcost,
+                            FracStartupCost = totstartupcost/totcost,
+                            FracVarCost = totvarcost/totcost,
+                            timeseries = inputs[1,:timeseriesID],
+                            stoch_scenario = inputs[1,:stochID])</p>
+
+<p>writecsvmulti(output_summary,output_fol,&ldquo;summary_stats&rdquo;,multiTF,periodsave)</p>
+
+<h1>Get dual variables and save</h1>
+
+<p>#supplydemand #2D
+sd_shadow = DataFrame(getdual(supplydemand))
+writecsvmulti(sd_shadow,output_fol,&ldquo;supplydemand_shadow&rdquo;,multiTF,periodsave)</p>
+
+<h3>mingen</h3>
+
+<p>mingen_shadow = getdual(mingen)
+mingen_sf = convert3dto2d(mingen_shadow,1, 3,  2,
+    vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;GEN_IND&rdquo;,&ldquo;t&rdquo;),
+     genset[:,:plantUnique])</p>
+
+<h1>only save rows where there is a nonzero shadow price</h1>
+
+<p>shadowsum = sum(convert(Array{Float64},mingen_sf[:,1:n_omega]),2)
+saveind = find(shadowsum .!= 0)
+writecsvmulti(mingen_sf[saveind,:],output_fol,&ldquo;mingen_shadow&rdquo;,multiTF,periodsave)</p>
+
+<h3>type3dr</h3>
+
+<p>if DRtype == 3
+    type3dr_shadow = getdual(type3dr)
+    type3dr_sf = convert3dto2d(type3dr_shadow,1, 3,  2,
+        vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;DR_IND&rdquo;,&ldquo;t&rdquo;),
+         genset[dr_ind,:plantUnique])
+    # only save rows where there is a nonzero shadow price
+    shadowsum = sum(convert(Array{Float64},type3dr_sf[:,1:n_omega]),2)
+    saveind = find(shadowsum .!= 0)
+    writecsvmulti(type3dr_sf[saveind,:],output_fol,&ldquo;type3dr_shadow&rdquo;,multiTF,periodsave)
+end</p>
+
+<h3>ramplim</h3>
+
+<h1>rampl_shadow = getdual(ramplim)</h1>
+
+<h1>rampl_sf = convert3dto2d(rampl_shadow,1, 3,  2,</h1>
+
+<h1>vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;GEN_IND&rdquo;,&ldquo;t&rdquo;),</h1>
+
+<h1>genset[:,:plantUnique])</h1>
+
+<h1># only save rows where there is a nonzero shadow price</h1>
+
+<h1>shadowsum = sum(convert(Array{Float64},rampl_sf[:,1:n_omega]),2)</h1>
+
+<h1>saveind = find(shadowsum .!= 0)</h1>
+
+<h1>writecsvmulti(rampl_sf[saveind,:],output_fol,&ldquo;ramplimit_shadow&rdquo;,multiTF,periodsave)</h1>
+
+<p>#</p>
+
+<h1>### limstart</h1>
+
+<h1>if startlim !=0</h1>
+
+<h1>limstart_shadow = getdual(limstart)</h1>
+
+<h1>limstart_sf = convert3dto2d(limstart_shadow,1, 3,  2,</h1>
+
+<h1>vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;DR_IND&rdquo;,&ldquo;t&rdquo;),</h1>
+
+<h1>genset[dr_ind,:plantUnique])</h1>
+
+<h1># only save rows where there is a nonzero shadow price</h1>
+
+<h1>shadowsum = sum(convert(Array{Float64},limstart_sf[:,1:n_omega]),2)</h1>
+
+<h1>saveind = find(shadowsum .!= 0)</h1>
+
+<h1>writecsvmulti(limstart_sf[saveind,:],output_fol,&ldquo;startlimit_shadow&rdquo;,multiTF,periodsave)</h1>
+
+<h1>end</h1>
+
+<h1>### limhrs</h1>
+
+<h1>if hourlim != 0</h1>
+
+<h1>limhrs_shadow = getdual(limhrs)</h1>
+
+<h1>limhrs_sf = convert3dto2d(limhrs_shadow,1, 3,  2,</h1>
+
+<h1>vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;DR_IND&rdquo;,&ldquo;t&rdquo;),</h1>
+
+<h1>genset[dr_ind,:plantUnique])</h1>
+
+<h1># only save rows where there is a nonzero shadow price</h1>
+
+<h1>shadowsum = sum(convert(Array{Float64},limhrs_sf[:,1:n_omega]),2)</h1>
+
+<h1>saveind = find(shadowsum .!= 0)</h1>
+
+<h1>writecsvmulti(limhrs_sf[saveind,:],output_fol,&ldquo;hourlimit_shadow&rdquo;,multiTF,periodsave)</h1>
+
+<h1>end</h1>
+
+<h1>### limenergy</h1>
+
+<h1>if energylim !=0</h1>
+
+<h1>limenergy_shadow = getdual(limenergy)</h1>
+
+<h1>limenergy_sf = convert3dto2d(limenergy_shadow,1, 3,  2,</h1>
+
+<h1>vcat([String(&ldquo;o$i&rdquo;) for i in 1:n_omega],&ldquo;DR_IND&rdquo;,&ldquo;t&rdquo;),</h1>
+
+<h1>genset[dr_ind,:plantUnique])</h1>
+
+<h1># only save rows where there is a nonzero shadow price</h1>
+
+<h1>shadowsum = sum(convert(Array{Float64},limenergy_sf[:,1:n_omega]),2)</h1>
+
+<h1>saveind = find(shadowsum .!= 0)</h1>
+
+<h1>writecsvmulti(limenergy_sf[saveind,:],output_fol,&ldquo;energylimit_shadow&rdquo;,multiTF,periodsave)</h1>
+
+<h1>end</h1>
+
+</body>
+
+</html>
+

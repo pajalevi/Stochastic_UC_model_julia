@@ -89,11 +89,10 @@ laptop_params_fol = "Julia_UC_Github/Julia_scripts/"
 ## ERCOT DATASET
 ## DR is added to slow/fast categories depending on value of
 ## DRtype (in inputs csv)
-slow_gens = ["HYDRO",
-            "COAL","NUCLEAR","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_CC"]
+slow_gens = ["COAL","NUCLEAR","LANDFILL_GAS",
+            "BIOMASS","GAS","GAS_ST","GAS_CC"]
             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
-fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND","GAS_ST"]
+fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND","HYDRO"]
 dr_gens = ["DR"]
 notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO",
             "LANDFILL_GAS","NUCLEAR","OIL","SOLAR","WIND"    ]
