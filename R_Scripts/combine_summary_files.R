@@ -16,8 +16,17 @@ runIDs7 = c(
   "sensPeriodLen4","sensBinary")
 runDates7 = rep("2019-07-04",11)
 
-runIDs = runIDs7#c(runIDs1,runIDs2)
-runDates = runDates7#c(runDates1, runDates2)
+runIDs8 = c("oldGen_newSettings1","oldGen_newSettings2","newGen_newSettings1","newGen_newSettings2")
+runDates8 = rep("2019-08-30",4)
+runIDs9 = c("oldGen_newSett_bin_DR1",	"oldGen_newSett_bin_DR3",	
+            "newGen_newSett_bin_DR1",	"newGen_newSett_bin_DR3",	
+            "newGen_startuplim_nonbinary",	"newGen_startuplim_binary")
+runDates9 = rep("2019-09-04",6)
+
+
+
+runIDs = runIDs9#c(runIDs1,runIDs2)
+runDates = runDates9#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####
