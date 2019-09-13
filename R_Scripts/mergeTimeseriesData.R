@@ -44,7 +44,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
   # ID which files are overlapping
   allperiodinfo = str_split(all_files,"_|\\.|-|p",simplify=T)
   lenInfo = ncol(allperiodinfo)
-  prev_overlap = as.numeric(allperiodinfo[2:nfiles,lenInfo - 2]) - as.numeric(allperiodinfo[1:(nfiles-1),lenInfo - 1])
+  prev_overlap = 1+sort(as.numeric(allperiodinfo[,lenInfo - 1]))[1:(nfiles-1)] - sort(as.numeric(allperiodinfo[,lenInfo - 2]))[2:nfiles]
   print("Period overlaps are:")
   print(prev_overlap)
   # if i-th  prev_overlap <0 , then (i+1)th period overlaps with previous

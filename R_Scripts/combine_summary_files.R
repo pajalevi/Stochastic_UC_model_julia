@@ -23,10 +23,13 @@ runIDs9 = c("oldGen_newSett_bin_DR1",	"oldGen_newSett_bin_DR3",
             "newGen_startuplim_nonbinary",	"newGen_startuplim_binary")
 runDates9 = rep("2019-09-04",6)
 
+runIDs10 = c("base_noDRfullyear2")
+runDates10 = c("2019-09-12")
 
 
-runIDs = runIDs9#c(runIDs1,runIDs2)
-runDates = runDates9#c(runDates1, runDates2)
+
+runIDs = runIDs10#c(runIDs1,runIDs2)
+runDates = runDates10#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####
