@@ -36,19 +36,26 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
   # input_fol is needed if dataStage=2
   # nscen (number of scenarios) also only needed if dataStage=2
  # print(paste("allowed files are", validP$x))
-  
+
   all_files = list.files(path=output_fol, pattern = dataType)
   nfiles = length(all_files)
   if(nfiles == 0) { stop("no files found matching dataType ", dataType, " in folder ", output_fol)}
-  
   # ID which files are overlapping
   allperiodinfo = str_split(all_files,"_|\\.|-|p",simplify=T)
   lenInfo = ncol(allperiodinfo)
-  prev_overlap = 1+sort(as.numeric(allperiodinfo[,lenInfo - 1]))[1:(nfiles-1)] - sort(as.numeric(allperiodinfo[,lenInfo - 2]))[2:nfiles]
+  
+  # sort by the first period
+  reorder = order(as.numeric(allperiodinfo[,lenInfo - 2]))
+  allperiodinfo = allperiodinfo[reorder,]
+  all_files = all_files[reorder]
+
+  prev_overlap = 1+as.numeric(allperiodinfo[,lenInfo - 1])[1:(nfiles-1)] - as.numeric(allperiodinfo[,lenInfo - 2])[2:nfiles]
+    # this is 1 + last period[i] - first period[i+1]
   print("Period overlaps are:")
   print(prev_overlap)
   # if i-th  prev_overlap <0 , then (i+1)th period overlaps with previous
   # this should obviate 'overlap'
+  
   
   ## check if any of the prev_overlap entries that are <0 are not the correct overlap. if so stop.
   overlapsel = which(prev_overlap < 0)
@@ -59,8 +66,8 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
   }
   
   
-  for(i in 1:nfiles){
-    print(all_files[i])
+  for(i in 1:nfiles){ 
+    print(paste("i is",i,"file name is",all_files[i]))
     # load period info for this file
     # xx = all_files[i]
     periodinfo = allperiodinfo[i,]
@@ -102,57 +109,69 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
           output = merge(outputdt, probdt, all.x = T, by="scenario")
         }
         
-      } else if (dataStage == 1){
+      } else if (dataStage == 1){ 
         # add a t column
         output$t = firstperiod:lastperiod
       } else{ stop("dataStage ", dataStage," is invalid. must be 1 or 2")}
       
       # trim output
-      if(i ==1){ ## is this the first period?
-        if(prev_overlap[i] < 0){ #does it overlap with second period
+      if(periodnum ==1){ ## is this the first period? 
+        
+        print(paste("period",periodnum, "encompassing",firstperiod,"-",lastperiod,"is the first period"))
+        if(prev_overlap[i] > 0){ #does it overlap with second period
           # trim beginning with endtrim
           # trim end with overlap
           tSel = which(output$t >= firstperiod + endtrim & 
                          output$t <= lastperiod - overlap/2)
-          
+          print(paste("period number",periodnum,"overlaps with next period"))
         } else {
           ## trim both ends with endtrim
           tSel = which(output$t >= firstperiod + endtrim & 
                          output$t <= lastperiod - endtrim)
+          print(paste("period number",periodnum,"does not overlap with next period"))
         }
 
       } else{ # not the first period
-        if(prev_overlap[i-1] < 0){ # does it overlap with previous period?
-          if(i==nfiles){ # is it the last period?
+        if(prev_overlap[i-1] > 0){ # does it overlap with previous period?
+          print(paste("period number",periodnum,"overlaps with previous period"))
+          if(periodnum==nfiles){ # is it the last period?
+            #TODO: use periodnum info
             # trim beginning with overlap
             # trim end with endtrim
             tSel = which(output$t >= firstperiod + overlap/2 & 
                            output$t <= lastperiod - endtrim)
-          } else if(prev_overlap[i] <0){ # does it overlap with next period?
+            print(paste("period number",periodnum,"is the last period"))
+          } else if(prev_overlap[i] > 0){ # does it overlap with next period?
             # trim both ends with overlap
             tSel = which(output$t >= firstperiod + overlap/2 & 
                            output$t <= lastperiod - overlap/2)
+            print(paste("period number",periodnum,"overlaps with next period"))
           } else { # does not overlap with next period
             # trim beginning with overlap
             # trim end with endtrim
             tSel = which(output$t >= firstperiod + overlap/2 & 
                            output$t <= lastperiod - endtrim)
+            print(paste("period number",periodnum,"does not overlap with next period"))
           }
         } else { # does not overlap with previous period
-          if(i==nfiles){ # is it the last period?
+          print(paste("period number",periodnum,"does not overlap with previous period"))
+          if(periodnum==nfiles){ # is it the last period?
             # trim beginning with endtrim
             # trim end with endtrim
             tSel = which(output$t >= firstperiod + endtrim & 
                            output$t <= lastperiod - endtrim)
-          } else if(prev_overlap[i] <0){ # does it overlap with next period?
+            print(paste("period number",periodnum,"is the last period"))
+          } else if(prev_overlap[i] > 0){ # does it overlap with next period?
             # trim beginning with endtrim
             # trim end with overlap
              tSel = which(output$t >= firstperiod + endtrim & 
                            output$t <= lastperiod - overlap/2)
+             print(paste("period number",periodnum,"overlaps with next period"))
           } else { # does not overlap with next period
             # trim both ends with endtrim
             tSel = which(output$t >= firstperiod + endtrim & 
                            output$t <= lastperiod - endtrim)
+            print(paste("period number",periodnum,"does not overlap with next period"))
           }
         }
       }

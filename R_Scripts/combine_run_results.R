@@ -60,7 +60,10 @@ combineRunResults <- function(runID, runDate, graphs = T,
   params = spread(params, key = input_name, value = runID)
   params$nrandp = as.numeric(params$nrandp)
   overlaplength = as.numeric(params$overlapLength)
-  if(is.null(endtrim)){endtrim = overlaplength/2}
+  if(is.null(endtrim)){
+    endtrim = overlaplength/2
+    print(paste("endtrim set to", endtrim))
+    }
   
   print(paste("overlap length is",overlaplength,"and number of scenarios is",params$nrandp))
   

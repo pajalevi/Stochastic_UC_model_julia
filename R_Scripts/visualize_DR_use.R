@@ -93,7 +93,7 @@ if(summary_combine){
   options(readr.num_columns = 0) # turn off read_csv messages
   for(r in 1:length(runIDs)){
     print(runIDs[r])
-    combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = F,endtrim = 6)
+    combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = F)
     print("Done, resting")
     Sys.sleep(15) #let the computer cool down
   }
