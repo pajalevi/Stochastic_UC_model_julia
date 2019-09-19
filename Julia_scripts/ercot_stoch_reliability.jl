@@ -7,6 +7,9 @@
 # The only uncertainty modeled is that of the actual DR generation
 # The availability of DR can be restricted by the last four command line args
 
+# _relibility.jl version adds ability to model the response of DR to
+# first-stage directions (assuming DR is type 3)
+
 # cmd line format should be:
 # include("full_universe_stoch.jl") <date> <inputs_file_name> <multi-runTF> <period_name>
 #
@@ -52,6 +55,7 @@ using JLD2
 include("convert3dto2d.jl")
 include("make_scenarios.jl")
 include("writecsvmulti.jl")
+include("combine_scenarios.jl")
 
 test = Gurobi.Env() # test that gurobi is working
 
@@ -169,6 +173,7 @@ dr_varcost = parse(Float64,inputs[1,:dr_varcost])
 randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
 trueBinaryStartup = parse(Bool,lowercase(inputs[1,:trueBinaryStartup]))
 DRtype = parse(Int64,inputs[1,:DRtype])
+DRrand = parse(Bool,lowercase(inputs[1,:DRrand]))
 nrandp = parse(Int64,inputs[1,:nrandp])
 int_length = parse(Int64,inputs[1,:intlength])
 debug = !parse(Bool, lowercase(inputs[1,:solve_model]))
@@ -231,7 +236,8 @@ dem = dem2[hours,2]
     # if this becomes a problem, look into https://github.com/JuliaMath/DecFP.jl
 
 ## Net Demand uncertainty ##
-
+# if _vdem files do not exist already, assume that the distribution data
+# is given by a file describing the probability distribution of deviations
 if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv"))
     ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_nd.csv"))
     ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
@@ -247,6 +253,21 @@ else
     pro = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_prob","_",inputs[1,:stochID],"_",periodsave,".csv")))
 end
 
+## DR Response uncertainty ##
+vdr_in = CSV.read(string(default_data_fol,"drResponseScenarios_vdr_",inputs[1,:DRrand_ID],"_",periodsave,".csv"))
+
+## Use make_scenarios (or some version thereof) to create new vdr, vdem, pro
+## representing combined scenarios
+
+#TODO: code this here
+#TODO: adjust make_scenarios_int to respect timeseries of vdem
+#            kind of needs to be a totally differet thing since I am not
+#               constructing scenarios from intervals and probability distributions
+#               but rather from a provided set of timeseries trajectories
+#       so we really need a combine_scenarios() function!
+
+
+
 # if sum(pro) != 1
     # error("sum of probabilities is not one, it is ", sum(pro))
 # end
@@ -259,6 +280,8 @@ n_omega = length(pro) #redefine for new number of scenarios
 
 # Set up demand realizations matrix dem_real[t,o] #
 dem_real = dem .* vdem
+
+
 
 # --------------------------------------------------------------------------------------
 # GENERATOR DATA
@@ -459,9 +482,12 @@ end
 # one workaround is p[g=GDR,t,o] being its own variable.
 # would need to change SUPPLY-DEMAND, GENMAX, and potentially startup/commitment too,
 # since these rely on the GENERATORS index...
-
-# @constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
-#      p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o])
+if DRtype == 3 & DRrand
+@constraint(m, dr_rand[g=1:n_gdr,t = TIME, o = SCENARIOS],
+     p[GDR[g],t,o] == p_dr[g,t] * vdr[t,o]) #TODO: create vdr and adjust its format
+elseif DRtype != 3 & DRrand
+    error("DRrand can only be used with a DRtype of 3")
+end
 
 #STARTUP COUNT
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],
