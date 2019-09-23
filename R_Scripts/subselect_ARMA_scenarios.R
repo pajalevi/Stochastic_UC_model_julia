@@ -10,7 +10,7 @@
 library(stringr)
 library(tidyverse)
 
-subselect_ARMA = function(n_scenarios,folder, filepattern = "demandScenarios_prob_ARMA26.0"){
+subselect_ARMA = function(n_scenarios,folder, filepattern = "demandScenarios_prob_ARMA26.0",ID_length=5){
   # filepattern is assumed to have the standard 3-part identifier 
   # starting at the end of the form "pXX_XXXX_XXXX.csv"
   # or at least be consistent across prob and vdem
@@ -31,14 +31,17 @@ subselect_ARMA = function(n_scenarios,folder, filepattern = "demandScenarios_pro
     if(abs(sum(newprob) - 1) > 1e-10){stop("newprob is",newprob,"something has gone terribly wrong")}
     
     outfile = data.frame(V1 = newprob)
-    write_csv(outfile, paste0(folder,filepattern,"_o",n_scenarios,"_",file_ends[i]))
+    write_csv(outfile, paste0(folder,filepattern,"_o",n_scenarios,"_",substr(file_ends[i],ID_length,100)))
     
     # make and save new _vdem file with subselection
     vdem = read.csv(file = paste0(folder,filepattern_vdem,"_", file_ends[i]))
     vdem_subsel = vdem[,1:n_scenarios]
-    write_csv(vdem_subsel, paste0(folder,filepattern_vdem,"_o",n_scenarios,"_",file_ends[i]))
+    write_csv(vdem_subsel, paste0(folder,filepattern_vdem,"_o",n_scenarios,"_",substr(file_ends[i],ID_length,100)))
   }
 }
 
-folder = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/5d_6o_periods/"
-subselect_ARMA(5,folder)
+# folder = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/5d_6o_periods/"
+# subselect_ARMA(5,folder)
+
+folder = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/3d_6o_testDays/"
+subselect_ARMA(5,folder, ID_length = 5)

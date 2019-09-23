@@ -32,7 +32,6 @@ function combine_scenarios(dr_scenarios, dr_p, nd_scenarios, nd_p)
         nd_ind = nd_ind_array[i]
         println("nd_ind is ", nd_ind)
         #
-
         vdr[:,i] = dr_scenarios[:,dr_ind]
         vnd[:,i] = nd_scenarios[:,nd_ind]
         prob_array[i] = dr_p[dr_ind] * nd_p[nd_ind]
@@ -41,3 +40,5 @@ function combine_scenarios(dr_scenarios, dr_p, nd_scenarios, nd_p)
 
     return(vdr,vnd,prob_array)
 end
+
+#test
