@@ -35,7 +35,7 @@ subselect_ARMA = function(n_scenarios,folder, filepattern = "demandScenarios_pro
     
     # make and save new _vdem file with subselection
     vdem = read.csv(file = paste0(folder,filepattern_vdem,"_", file_ends[i]))
-    vdem_subsel = vdem[,1:n_scenarios]
+    vdem_subsel = vdem[,sample(1:ncol(vdem),size=n_scenarios)]#vdem[,1:n_scenarios]
     write_csv(vdem_subsel, paste0(folder,filepattern_vdem,"_o",n_scenarios,"_",substr(file_ends[i],ID_length,100)))
   }
 }

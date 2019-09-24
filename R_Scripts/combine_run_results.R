@@ -125,10 +125,11 @@ combineRunResults <- function(runID, runDate, graphs = T,
   # merge with gendat
   cmtcap = slowcomt %>%
     gather(key = "generator", value = "cmt", -t) %>%
-    merge(gendat[,c("Capacity","PMin","plantUnique")], by.x = "generator", by.y = "plantUnique") %>%
+    merge(gendat[,c("Capacity","PMin","plantUnique","VCost")], by.x = "generator", by.y = "plantUnique") %>%
     mutate(capComt = cmt*Capacity) %>%
     group_by(t) %>%
     summarise(allcmtcap = sum(capComt))
+  write.csv(cmtcap,paste0(output_fol,"slow_committed_capactity.csv"),row.names = F)
   
   if(graphs){
     ggplot(cmtcap,aes(x=allcmtcap/1000)) + geom_histogram() +
@@ -174,6 +175,10 @@ combineRunResults <- function(runID, runDate, graphs = T,
     slowgens = slowgens$x
     print(head(slowgens))
   }
+  
+  prod = prod %>%
+    merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel","PLC2ERTA")], by.x = "GEN_IND", by.y = "plantUnique") 
+  
   
   ## Find ramp rates of system ####
   # differentiate by slow ramp and total ramp
@@ -285,7 +290,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   ## plot marginal price ##
   prod2 = prod %>%
-    merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel")], by.x = "GEN_IND", by.y = "plantUnique") %>%
+    # merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel")], by.x = "GEN_IND", by.y = "plantUnique") %>%
     filter(MWout > 0) 
   prod_margprice = prod2 %>%
     group_by(t,scenario) %>%
@@ -413,7 +418,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   prod$speed[str_detect(prod$GEN_IND,"DR-")] = "DR"
   
   # associate generator production cost
-  prod = merge(as.data.table(prod), as.data.table(gendat[,c("plantUnique","VCost","PLC2ERTA")]), all.x=T,by.x="GEN_IND",by.y="plantUnique")
+  # prod = merge(as.data.table(prod), as.data.table(gendat[,c("plantUnique","VCost","PLC2ERTA")]), all.x=T,by.x="GEN_IND",by.y="plantUnique")
   prod$prob = 1/params$nrandp
   
   prodcost = prod %>%
