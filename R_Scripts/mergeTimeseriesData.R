@@ -58,12 +58,12 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
   
   
   ## check if any of the prev_overlap entries that are <0 are not the correct overlap. if so stop.
-  overlapsel = which(prev_overlap < 0)
-  if(sum(prev_overlap[overlapsel]*-1 != overlap) > 0){
-    print(paste("Period number: ",allperiodinfo[overlapsel,lenInfo - 3],
-          " overlaps with previous period by: ",prev_overlap[overlapsel]*-1), collapse = ", ")
-    stop("Period overlaps are not consistent with prescribed overlap of ",overlap)
-  }
+  # overlapsel = which(prev_overlap < 0)
+  # if(sum(prev_overlap[overlapsel]*-1 != overlap) > 0){
+  #   print(paste("Period number: ",allperiodinfo[overlapsel,lenInfo - 3],
+  #         " overlaps with previous period by: ",prev_overlap[overlapsel]*-1), collapse = ", ")
+  #   stop("Period overlaps are not consistent with prescribed overlap of ",overlap)
+  # }
   
   
   for(i in 1:nfiles){ 

@@ -30,9 +30,14 @@ inputFol = "Data/julia_input/"
 #X 2 - run combineRunResults for new baserun, save objects noted above. 
 # >>        also save for old baserun
 #X 3 - download prod.csv etc for old baserun and new baserun, debug script
+#       - print dates corresponding to each selection using as.Date() which is 0 based so hour/24 is an appropriate input
+#       - possibly find max day for each category instead of max hours
 # 4 - compare the keydays selected for old and new -- why?
 
-pickKeyDays = function(gendat,output_fol,top_n = 20,summer_demand_days = 5,winter_demand_days = 3,base_fol = baseFol, output_fol_base = outputFolBase){
+# key_days = pickKeyDays(Gendat,output_fol = Output_fol, prod = prod)
+pickKeyDays = function(gendat,output_fol,top_n = 3,
+                       summer_demand_days = 5,winter_demand_days = 3, price_days = 10,
+                       base_fol = baseFol, output_fol_base = outputFolBase, buffer = 12,prod=NULL){
   # inputs: prod and other outputs from a full-year run
   # outputs: days of year that should be included in smaller runs
   # loads prod, cmtcap, and demand
@@ -42,82 +47,131 @@ pickKeyDays = function(gendat,output_fol,top_n = 20,summer_demand_days = 5,winte
   
   # Load prod data
   filename = paste0(base_fol,output_fol_base,output_fol,"prod.csv")
-  prod = read_csv(filename)
-  prod = prod %>%
-    merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel","PLC2ERTA")], by.x = "GEN_IND", by.y = "plantUnique") 
+  if(is.null(prod)){
+    prod = read_csv(filename)
+  }
+  prod = prod[prod$t>buffer,]
+  if(!("Capacity" %in% colnames(prod))){
+    prod = prod %>%
+      merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel","PLC2ERTA")], by.x = "GEN_IND", by.y = "plantUnique") 
+  }
   
   # ID max up and down ramp hours for fast and all generators (4)
-  prodramp = prod %>%
+  # group by day
+  prod$date = as.Date(floor(prod$t/24),origin="2016-01-01")
+  # separate RE from 'fast' generators
+  REsel = str_detect(prod$GEN_IND,"WIND") | str_detect(prod$GEN_IND,"SOLAR")
+  prod$speed[REsel] = "non-dispatchable"
+  prodramp_hour = prod %>%
     group_by(scenario,speed,t) %>%
     summarise(MWtot = sum(MWout)) %>%
     group_by(scenario,speed) %>%
     mutate(ramp = MWtot - lag(MWtot, default=0))
-  prodslowsel = which(prodramp$speed == "slow")
-  prodfastsel = which(prodramp$speed == "fast")
+  first_t = min(prodramp_hour$t)
+  prodramp_hour$ramp[prodramp_hour$t == first_t] = 0 #make sure first timestep doesnt have a huge ramp
+
+  prodramp_hour$date = as.Date(floor(prodramp_hour$t/24),origin="2016-01-01")
   
-  # all generators
+  prodramp = prodramp_hour %>%
+    group_by(scenario,date,speed) %>%
+    summarise(maxramp = max(ramp),
+              minramp = min(ramp))
+  
+  prodslowsel = which(prodramp$speed == "slow") # hydro is considered slow, which isn't... quite right.
+  prodfastsel = which(prodramp$speed == "fast") # This includes RE, so fast ramps could just be a reflection of RE ramps...
+  
+  # slow generators
   # downward ramp
-  topInd = which(rank(prodramp$ramp) <= top_n & prodramp$ramp < -1e-6)
-  topT = prodramp$t[topInd]
-  n = length(unique(floor(topT/24)))
-  print(paste("there are",n,"unique days that have the top",top_n,"downward ramps"))
+  topInd = which(rank(prodramp$minramp[prodslowsel]) <= top_n & prodramp$minramp[prodslowsel] < -1e-6)
+  topT = prodramp$date[prodslowsel][topInd]
+  # n = length(unique(floor(topT/24)))
+  n = length(unique(topT))
+  print(paste("there are",n,"unique days that have the top",top_n,"slow downward ramps"))
+  print(sort(topT))
   all_t = unique(topT)
   # upward ramp
-  topInd = which(rank(prodramp$ramp) >= nrow(prodramp)-top_n)
-  topT = prodramp$t[topInd]
-  n = length(unique(floor(topT/24)))
-  print(paste("there are",n,"unique days that have the top",top_n,"upward ramps"))
+  topInd = which(rank(prodramp$maxramp[prodslowsel]) > nrow(prodramp[prodslowsel,])-top_n)
+  topT = prodramp$date[prodslowsel][topInd]
+  # n = length(unique(floor(topT/24)))
+  n = length(unique(topT))
+  print(paste("there are",n,"unique days that have the top",top_n,"slow upward ramps"))
+  print(sort(topT))
   all_t = c(all_t, unique(topT))
   
   # fast generators
   # downward ramp
-  topInd = which(rank(prodramp$ramp[prodfastsel]) <= top_n & prodramp$ramp[prodfastsel] < -1e-6)
-  topT = prodramp$t[prodfastsel[topInd]]
-  n = length(unique(floor(topT/24)))
+  topInd = which(rank(prodramp$minramp[prodfastsel]) <= top_n & prodramp$minramp[prodfastsel] < -1e-6)
+  topT = prodramp$date[prodfastsel[topInd]]
+  # n = length(unique(floor(topT/24)))
+   n=length(unique(topT))
   print(paste("there are",n,"unique days that have the top",top_n,"fast downward ramps"))
+  print(sort(topT))
   all_t = c(all_t, unique(topT))
   # upward ramp
-  topInd = which(rank(prodramp$ramp[prodslowsel]) >= nrow(prodramp[prodslowsel,])-top_n)
-  topT = prodramp$t[prodslowsel][topInd]
-  n = length(unique(floor(topT/24)))
+  topInd = which(rank(prodramp$maxramp[prodfastsel]) > nrow(prodramp[prodfastsel,])-top_n)
+  topT = prodramp$date[prodfastsel][topInd]
+  # n = length(unique(floor(topT/24)))
+   n=length(unique(topT))
   print(paste("there are",n,"unique days that have the top",top_n,"fast upward ramps"))
+  print(sort(topT))
   all_t = c(all_t, unique(topT))
   
   # price data
   # NB: assumes that gendat is included in prod
   prod_margprice = prod %>%
     filter(MWout > 2) %>%
-    group_by(t,scenario) %>%
+    group_by(date,scenario) %>%
     summarise(margprice = max(VCost),
               marggen = GEN_IND[which.max(VCost)],
               marggencap = Capacity[which.max(VCost)],
               marggenspd = speed[which.max(VCost)])
   
   # ID max marginal price hours (1)
-  topInd = which(rank(prod_margprice$margprice) >= nrow(prod_margprice)-top_n)
-  topT = prod_margprice$t[topInd]
-  n = length(unique(floor(topT/24)))
-  print(paste("there are",n,"unique days that have the top",top_n,"marginal generator price hours"))
+  topInd = which(rank(prod_margprice$margprice) > nrow(prod_margprice)-price_days)
+  topT = prod_margprice$date[topInd]
+  # n = length(unique(floor(topT/24)))
+   n=length(unique(topT))
+  print(paste("there are",n,"unique days that have the top",price_days,"marginal generator price hours"))
+  print(sort(topT))
+  prod_margprice[topInd,]
   all_t = c(all_t, unique(topT))
   
   # ID max spread in marginal price hours (1) 
-  prod_pricediff = prod_margprice %>%
-    group_by(t) %>%
-    summarise(gendiff = max(margprice) - min(margprice))
-  topInd = which(rank(prod_pricediff$gendiff) >= nrow(prod_pricediff)-top_n)
-  topT = prod_pricediff$t[topInd]
-  n = length(unique(floor(topT/24)))
-  print(paste("there are",n,"unique days that have the top",top_n,"marginal generator price spread hours"))
+  prod_pricediff = prod %>%
+    filter(MWout > 2) %>%
+    group_by(t,scenario,date) %>%
+    summarise(margprice = max(VCost),
+              marggen = GEN_IND[which.max(VCost)],
+              marggencap = Capacity[which.max(VCost)],
+              marggenspd = speed[which.max(VCost)]) %>%
+    group_by(date) %>%
+    summarise(maxspread = max(margprice)-min(margprice))
+  
+  # prod_pricediff = prod_margprice %>%
+  #   group_by(t) %>%
+  #   summarise(maxspread = max(margprice) - min(margprice))
+  topInd = which(rank(prod_pricediff$maxspread) > nrow(prod_pricediff)-top_n)
+  topT = prod_pricediff$date[topInd]
+  # n = length(unique(floor(topT/24)))
+   n=length(unique(topT))
+  print(paste("there are",n,"unique days that have the top",top_n,"marginal generator price spread days"))
+  print(sort(topT))
+  prod_pricediff[topInd,]
   all_t = c(all_t, unique(topT))
   
-    
   # Load commitment data
   cmtcap = read_csv(file = paste0(base_fol,output_fol_base,output_fol,"slow_committed_capactity.csv"))
+  cmtcap$date = as.Date(floor(cmtcap$t/24),origin="2016-01-01")
+  cmtcap = cmtcap %>%
+    group_by(date) %>%
+    summarise(maxcmtcap = max(allcmtcap))
   # ID max slow committed capacity (1)
-  topInd = which(rank(cmtcap$allcmtcap) >= nrow(cmtcap)-top_n)
-  topT = cmtcap$t[topInd]
-  n = length(unique(floor(topT/24)))
-  print(paste("there are",n,"unique days that have the top",top_n,"slow committed capacity hours"))
+  topInd = which(rank(cmtcap$maxcmtcap) > nrow(cmtcap)-top_n)
+  topT = cmtcap$date[topInd]
+  # n = length(unique(floor(topT/24)))
+  n=length(unique(topT))
+  print(paste("there are",n,"unique days that have the top",top_n,"slow committed capacity days"))
+  print(sort(topT))
   all_t = c(all_t, topT)
 
   # Load demand data
@@ -130,56 +184,61 @@ pickKeyDays = function(gendat,output_fol,top_n = 20,summer_demand_days = 5,winte
     group_by(day) %>%
     summarise(maxdemand = max(demand))
   demand_daymax$month = month(demand_daymax$day)
-  summer_sel = which(demand_daymax$month >= 5 & demand_daymax$month < 9)
-  winter_sel = which(demand_daymax$month < 4 | demand_daymax$month >= 9)
+  summer_sel = which(demand_daymax$month >= 5 & demand_daymax$month < 10)
+  winter_sel = which(demand_daymax$month < 4 | demand_daymax$month >= 10)
   #summer max
   topInd = which(rank(demand_daymax$maxdemand[summer_sel]) >= nrow(demand_daymax[summer_sel,])-summer_demand_days+1)
-  topT = unique(yday(date(demand_daymax$day[summer_sel][topInd])))
+  topT = demand_daymax$day[summer_sel][topInd]
   n = length(unique(topT))
   print(paste("there are",n,"unique days that have the top",summer_demand_days,"summer demand days"))
-  all_t = c(all_t, topT*24-12) #convert day of year to the hour of the year of that day's noon.(ignoring DST)
+  print(sort(topT))
+  demand_daymax[summer_sel[topInd],]
+  all_t = c(all_t, topT) 
   
   #winter max
   topInd = which(rank(demand_daymax$maxdemand[winter_sel]) >= nrow(demand_daymax[winter_sel,])-winter_demand_days+1)
-  topT = unique(yday(date(demand_daymax$day[winter_sel][topInd])))
+  topT = demand_daymax$day[winter_sel][topInd]
   n = length(unique(topT))
   print(paste("there are",n,"unique days that have the top",winter_demand_days,"non-summer demand days"))
-  all_t = c(all_t, topT*24-12) #convert day of year to the hour of the year of that day's noon.(ignoring DST)
+  print(sort(topT))
+  demand_daymax[winter_sel[topInd],]
+  all_t = c(all_t, topT) 
   
   
   #--------------------------------------------#
   #### Find unique days across all max days ####
   
   all_t = unique(all_t)
-  print(paste("there are",length(all_t),"unique hours identified"))
-  keydays = unique(floor(all_t/24))
-  print(paste("there are",length(keydays),"unique days identified"))
+  print(paste("there are",length(all_t),"unique days identified"))
+  # keydays = unique(floor(all_t/24))
+  # print(paste("there are",length(keydays),"unique days identified"))
   
   return(all_t)
 }
 
-writeKeyDays = function(all_t,runLength,overlapLength,run_type = "keyDays2",buffer = 12){
-  # inputs: key days, length of run, overlap of run, buffer around key hours
+# periods = writeKeyDays(keydays = key_days,runLength = 5,overlap_length = 6,input_fol = inputFol, base_fol = baseFol)
+writeKeyDays = function(keydays,runLength,overlap_length,run_type = "keyDays2",buffer = 12,input_fol, base_fol){
+  # inputs: key days, length of run, overlap of run, buffer around key day
   # outputs: na
   # Action: writes period_X_XXXX_XXXX.csv files to appropriate folder. 
   #       and makes that folder if necessary
   
-  inputfolID = paste0(runlength,"d_",overlap_length,"o_",run_type)
+  inputfolID = paste0(runLength,"d_",overlap_length,"o_",run_type)
   instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
   
-  keydays = unique(floor(all_t/24))
+  all_t = sort((yday(keydays) * 24))
   
   # create holders
-  firsthr = rep(0,length(keydays))
-  lasthr = rep(0,length(keydays))
-  lastperiodhr = rep(0,length(keydays))
+  firsthr = rep(0,length(all_t))
+  lasthr = rep(0,length(all_t))
+  lastperiodhr = rep(0,length(all_t))
   
   # iterate to ID potential periods and must-run times
-  for(i in 1:length(keydays)){
-    firsthr[i] = keydays[i]-buffer # start run 12h before key day
-    lasthr[i] = keydays[i]+24 + buffer # end run requirement 12h after key day
+  for(i in 1:length(all_t)){
+    firsthr[i] = all_t[i]-buffer # start run 12h before key day
+    lasthr[i] = all_t[i]+24 + buffer # end run requirement 12h after key day
     
-    lastperiodhr[i] = keydays[i] + runlength*24 - buffer # runs are 5 d long
+    lastperiodhr[i] = all_t[i] + runLength*24 - buffer # runs are 5 d long
   }
   # make dir
   if(!file.exists(instance_in_fol)){
@@ -189,7 +248,8 @@ writeKeyDays = function(all_t,runLength,overlapLength,run_type = "keyDays2",buff
   # write unique periods
   lastwrittenperiod = 0
   periodnum = 1
-  for(i in 1:length(keydays)){
+  all_hours = NULL
+  for(i in 1:length(all_t)){
     if(i==1){ 
       #write a new period
       periods = c(firsthr[i]:lastperiodhr[i])
@@ -201,7 +261,7 @@ writeKeyDays = function(all_t,runLength,overlapLength,run_type = "keyDays2",buff
       # is new period consecutive with previous period?
       if(firsthr[i] - lastwrittenperiod < 12 ){ # consecutive
         print(paste("period",periodnum,"is consecutive. lasttwrittenperiod is",lastwrittenperiod,"and firsthr is",firsthr[i]))
-        last = min(lastperiodhr[i],lastwrittenperiod-overlap_length + runlength*24)
+        last = min(lastperiodhr[i],lastwrittenperiod-overlap_length + runLength*24)
         first = lastwrittenperiod-overlap_length
         periods = c(first:last)
         write.table(periods,col.names=F,sep=",",row.names=F, file = paste0(instance_in_fol,"periods_",periodnum,"_",first,"_",last,".csv"))
@@ -213,12 +273,31 @@ writeKeyDays = function(all_t,runLength,overlapLength,run_type = "keyDays2",buff
       }
       periodnum = periodnum +1
     } 
+    all_hours = c(all_hours,periods)
   }
+  return(all_hours)
+}
+
+# plot demand with included hours
+# plot_periods(periods,demand,baseFol,inputFol,"5d_6o_keyDays2")
+plot_periods = function(all_hours,demand,base_fol,input_fol,folder_name){
+  if(unique(diff(demand$date)) != 1){
+    error("demand is not sequentially ordered")
+  }
+  demand$t = 1:(nrow(demand))
+  demand$included = 0
+  index = demand$t %in% all_hours
+  demand$included[index] = 1
+  ggplot(demand,aes(x=date,y=demand,color = included)) + geom_line() +
+    guides(color = "none") +
+    labs(title = paste("2016 Demand and",folder_name,"modeled periods (light blue)"), y = "Demand (MW)", x = "Date") +
+    ggsave(filename = paste0(base_fol,input_fol,folder_name,"/demand.png"),width = 12,height=8)
 }
 
 # gen_arma() function
 source(paste0(base_fol,"Julia_UC_Github/R_Scripts/gen_arma.R"))
 
+# writeARMAInputs(period_dir = paste0(baseFol,inputFol,"5d_6d_keyDays2/"),n_omegas=10)
 writeARMAInputs = function(period_dir, n_omegas, p=26,q=0, xarma=NULL){
   # inputs: location of period files, number of scenarios, p and q for XARMA creation
   # outputs: na

@@ -61,9 +61,13 @@ runDates9 = rep("2019-09-04",6)
 runIDs10 = c("base_noDRfullyear2")
 runDates10 = c("2019-09-12")
 
+runIDs11 = c("rand_test","newGen_newSett_ARMAtest1",
+             "newGen_newSett_ARMAtest2","newGen_newSett_ARMAtest3")
+runDates11 = c("2019-09-23",rep("2019-09-24",3))
 
-runIDs = runIDs10#c(runIDs1,runIDs2)
-runDates = runDates10#c(runDates1, runDates2)
+
+runIDs = runIDs11#c(runIDs1,runIDs2)
+runDates = runDates11#c(runDates1, runDates2)
 inputfolID = "5d_6o_testDays" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 

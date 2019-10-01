@@ -8,19 +8,22 @@ library(lubridate)
 source('/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/R_scripts/hour_of_year.R')
 
 ### for daytime: 7am to 11pm
-dr_input_name = "dr_availability_always_2016.csv"
+dr_input_name = "dr_availability_afterwork_2016.csv"
 output_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/ercot_default/"
 
 days_in_year = 8760+24
 
+starthour = 17
+endhour = 22
+#PJM onpeak = >=16, <23
 
 pfdr = matrix(rep(0,days_in_year), nrow = days_in_year, ncol = 1, dimnames = list(c(paste0("h",1:days_in_year)),c("DR-1")))
 MOO_hours = c()
 for(i in 1:days_in_year){
-  thedate = date_from_yearhour(year = 2015, year_hour = i)
+  thedate = date_from_yearhour(year = 2016, year_hour = i)
   thehour = hour(thedate)
   # themonth = month(thedate)
-  if(thehour >=16 & thehour < 23  ){ # PJM on peak
+  if(thehour >=starthour & thehour < endhour  ){ 
     MOO_hours = c(MOO_hours, i)
   }
 }
