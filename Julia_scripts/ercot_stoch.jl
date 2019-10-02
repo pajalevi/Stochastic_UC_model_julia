@@ -366,7 +366,7 @@ GDR_SL_ind = findin(GSL,GDR)
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Presolve=0))
+m = Model(solver=GurobiSolver(Presolve=0, Method=1))
 
 if no_vars
     error("just testing model so we are stopping here")
