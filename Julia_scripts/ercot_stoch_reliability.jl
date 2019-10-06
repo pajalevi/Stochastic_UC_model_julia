@@ -127,7 +127,7 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 # PARSE CMD LINE ARGS #
 ARGNAMES = ["date" ,"inputs_file_name","input_verion" ,"multi-runTF", "period_name" ]
-defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","tiny","true","periods_1_5353_5400.csv"]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_rand.csv","rand_u80pp","true","periods_1_5353_5400.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
@@ -398,8 +398,11 @@ GDR_SL_ind = findin(GSL,GDR)
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Presolve=0, Method=1))
-
+m = Model(solver=GurobiSolver(Presolve=0, Method=1, 
+                              MIPFocus=1,
+                              Nodefilestart = 0.5,
+                              NodefileDir = "/scratch/users/pjlevi/gurobi_solving_outputs/"))
+                # can also try MIPFocus=3
 if no_vars
     error("just testing model so we are stopping here")
 else

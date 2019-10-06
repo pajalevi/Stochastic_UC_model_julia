@@ -22,10 +22,11 @@ library(tidyverse)
 library(viridis)
 library(lubridate)
 base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
-outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/"
+# outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/base_noDRfullyear_2019-05-02/"
+outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/base_noDRfullyear2_2019-09-12/"
 input_fol = "Data/julia_input/"
 default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
-runID = "base_noDRfullyear"
+runID = "base_noDRfullyear2"
 # test=read_csv(file = paste0(outputfol,"summary_statsbase_noDRfullyear.csv"))
 # print(test)
 ```
@@ -355,7 +356,7 @@ What about the effect of transmission constraints on local prices? to attempt to
 
 ```{r}
 ggplot(medprice, aes(x=medprice)) + geom_histogram(binwidth = 3) + 
-  scale_x_continuous(limits = c(0,100)) +
+  scale_x_continuous(limits = c(0,120)) +
   theme_bw() + labs(title = "Distribution of historical median price")
 ```
 To make clear the contrast, here's the plot of the distribution of the marginal price as modeled:
@@ -363,6 +364,7 @@ Modeled marginal cost:
 ```{r echo=FALSE}
   ggplot(prod_margprice,aes(x=margprice, fill=marggenspd)) + geom_histogram(binwidth = 3) + 
     scale_fill_viridis(discrete=T) + 
+  scale_x_continuous(limits = c(0,100)) +
     theme_bw() +
     labs(x = "Marginal Price", y = "Number of hours", title = "Distribution of marginal price by generator speed")
     # ggsave(filename = paste0(output_fol,"marginal_price_hist_",runID,".png"), width = 7, height = 5)

@@ -180,7 +180,8 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       # combine with previous
       if(i==1){ output_all = output 
       } else { 
-        output_all = rbind(output_all, output) 
+        # output_all = rbind(output_all, output) 
+        output_all = bind_rows(output_all, output) # should deal with diff numbers of columns, match by colname
       }
     }
   return(output_all)
