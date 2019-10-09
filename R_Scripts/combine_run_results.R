@@ -51,7 +51,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   # get input parameters ####
   if(!SHRLOK){
-    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv") # FIX ME
   }else{
     inputs_file =  paste0(base_fol,"/code/inputs_ercot.csv")
   }
@@ -176,8 +176,10 @@ combineRunResults <- function(runID, runDate, graphs = T,
     print(head(slowgens))
   }
   
-  prod = prod %>%
-    merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel","PLC2ERTA")], by.x = "GEN_IND", by.y = "plantUnique") 
+  if(!("PMin" %in% colnames(prod))){
+    prod = prod %>%
+      merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel","PLC2ERTA")], by.x = "GEN_IND", by.y = "plantUnique") 
+  }
   
   
   ## Find ramp rates of system ####
