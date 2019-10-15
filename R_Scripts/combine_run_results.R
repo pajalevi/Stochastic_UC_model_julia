@@ -412,7 +412,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   #-------------------
-  ## production costs ####
+  ## production costs AND co2 emissions ####
   # differentiate by 1st stage and expected 2nd stage
   
   # prob already loaded and differentiated by speed
@@ -424,9 +424,11 @@ combineRunResults <- function(runID, runDate, graphs = T,
   prod$prob = 1/params$nrandp
   
   prodcost = prod %>%
-    mutate(expectedcost = MWout * VCost * prob) %>% # double check units
+    mutate(expectedcost = MWout * VCost * prob,
+           expectedCO2 = MWout * PLC2ERTA * prob) %>% # double check units
     group_by(speed,t) %>%
-    summarise(ecost = sum(expectedcost))
+    summarise(ecost = sum(expectedcost),
+              eco2 = sum(expectedCO2))
   
   # plot ##
   prodcostplot = prodcost %>%
@@ -441,12 +443,19 @@ combineRunResults <- function(runID, runDate, graphs = T,
   # sum across time
   prodcosttot = prodcost %>%
     group_by(speed) %>%
-    summarise(ecost = sum(ecost)) %>%
-    spread(key=speed,value=ecost)
+    summarise(ecost = sum(ecost),
+              co2 = sum(eco2)) #%>%
+    # spread(key=speed,value=ecost)
+  slowseltot = which(prodcosttot$speed == "slow")
+  fastseltot = which(prodcosttot$speed == "fast")
+  DRseltot = which(prodcosttot$speed == "DR")
   # write to summary stats
-  write(paste0("slow prod costs,",prodcosttot$slow[1],"\n ",
-               "expected fast prod costs,",prodcosttot$fast[1],"\n",
-               "expected DR prod costs,",prodcosttot$DR[1],"\n"),
+  write(paste0("expected slow prod costs,",prodcosttot$ecost[slowseltot],"\n ",
+               "expected fast prod costs,",prodcosttot$ecost[fastseltot],"\n",
+               "expected DR prod costs,",prodcosttot$ecost[DRseltot],"\n",
+               "expected slow CO2 emissions,",prodcosttot$co2[slowseltot],"\n ",
+               "expected fast CO2 emissions,",prodcosttot$co2[fastseltot],"\n ",
+               "expected DR CO2 emissions,",prodcosttot$co2[DRseltot],"\n "),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   #-------------------
@@ -491,14 +500,14 @@ combineRunResults <- function(runID, runDate, graphs = T,
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)
   
   rm(allcosts,prodcost) # memory mangement
+  
+  #---------------------------------
+  ## find CO2 emissions ####
+  # already merged CO2 emissions data into prod array above
+  
+  
+  
 }
-
-#---------------------------------
-## [later] find CO2 emissions ####
-
-
-# already merged CO2 emissions data into prod array above
-
 
 #---------------------------------
 ## save a csv of key results ####

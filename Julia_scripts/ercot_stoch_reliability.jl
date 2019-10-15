@@ -127,7 +127,7 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 # PARSE CMD LINE ARGS #
 ARGNAMES = ["date" ,"inputs_file_name","input_verion" ,"multi-runTF", "period_name" ]
-defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_rand.csv","rand_u80pp","true","periods_1_5353_5400.csv"]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_rand.csv","rand_u20pp","true","periods_1_468_588.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
@@ -248,8 +248,8 @@ if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],
     demandScenarios = make_scenarios(n_periods, ndv_in, ndpro_in, int_length; randsel = randScenarioSel, nrand = nd_nrand_o)
     vdem_in = demandScenarios[1]
     vdem_p = demandScenarios[2]
-    writecsvmulti(DataFrame(vdem),subsel_data_fol,string("demandScenarios_vdem","_",inputs[1,:stochID]),multiTF,periodsave)
-    writecsvmulti(DataFrame(pro),subsel_data_fol,string("demandScenarios_prob","_",inputs[1,:stochID]),multiTF,periodsave)
+    writecsvmulti(DataFrame(vdem_in),subsel_data_fol,string("demandScenarios_vdem","_",inputs[1,:stochID]),multiTF,periodsave)
+    writecsvmulti(DataFrame(vdem_p),subsel_data_fol,string("demandScenarios_prob","_",inputs[1,:stochID]),multiTF,periodsave)
 else
     vdem_in = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv")))
     vdem_p = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_prob","_",inputs[1,:stochID],"_",periodsave,".csv")))
@@ -258,8 +258,8 @@ end
 ## DR Response uncertainty ##
 if !isfile(string(subsel_data_fol,"drResponseScenarios_vdr","_",inputs[1,:DRrand_ID],"_",periodsave,".csv"))
     drprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:DRrand_ID],"_dr.csv"))
-    drv_in = convert(Array,drprobs[1,:]) # converts the first row of probs to an Array
-    drpro_in = rationalize.(convert(Array,drprobs[2,:])) #to avoid rounding issues later
+    drv_in = convert(Array,drprobs[2,:]) # converts the first row of probs to an Array
+    drpro_in = rationalize.(convert(Array,drprobs[1,:])) #to avoid rounding issues later
 
     demandScenarios = make_scenarios(n_periods, drv_in, drpro_in, dr_int_length; randsel = randScenarioSel, nrand = dr_nrand_o)
     vdr_in = demandScenarios[1]
@@ -277,9 +277,13 @@ end
 println(vdr_p)
 println(vdem_p)
 scenario_info = combine_scenarios(vdr_in,vdr_p,vdem_in,vdem_p)
-vdr = scenario_info[1]
-vnd = scenario_info[2]
-pro = scenario_info[3]
+vdr = scenario_info[1];
+vnd = scenario_info[2];
+pro = scenario_info[3];
+writecsvmulti(DataFrame(vdr),subsel_data_fol,string("vdr","_",inputs[1,:DRrand_ID]),multiTF,periodsave)
+writecsvmulti(DataFrame(vnd),subsel_data_fol,string("vnd","_",inputs[1,:DRrand_ID]),multiTF,periodsave)
+writecsvmulti(DataFrame(pro),subsel_data_fol,string("pro","_",inputs[1,:DRrand_ID]),multiTF,periodsave)
+
 
 println("sum of probabilities is ", sum(pro))
 n_omega = length(pro) #redefine for new number of scenarios
@@ -398,7 +402,7 @@ GDR_SL_ind = findin(GSL,GDR)
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Presolve=0, Method=1, 
+m = Model(solver=GurobiSolver(Presolve=0, Method=1,
                               # MIPFocus=3,
                               MIPGap=0.0003,
                               NodefileStart = 0.05,
@@ -452,18 +456,22 @@ end
 #     dem_real[t,o] = dem[t] * vnd[t,o]) #THIS DOESNT NEED TO BE A CONSTRAINT?
 
 #GENMIN
-@constraint(m, mingen[g= 1:n_g, t= 1:n_t, o=1:n_omega ],
+@constraint(m, mingen[g= GEN_NODR, t= 1:n_t, o=1:n_omega ],
     p[g,t,o] >= pmin[g] * u[g,t,o])
 #GENMAX - only for GEN_NODR if dr is random
-@constraint(m,[g = 1:n_g, t = 1:n_t, o=1:n_omega],
+@constraint(m,[g = GEN_NODR, t = 1:n_t, o=1:n_omega],
     p[g,t,o] <= pmax[g] * u[g,t,o] * pf[g,t] )
 
 if DRtype == 3
 #GENMAXDR
     @constraint(m,[g = 1:n_gdr, t = 1:n_t],
-        p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_da
-    @constraint(m,type3dr[g=1:n_gdr,t = TIME, o = SCENARIOS],
-         p[GDR[g],t,o] == p_dr[g,t])
+        p_dr[g,t] <= pmax[GDR[g]] * w[GDR_SL_ind[g],t] * pf[GDR_SL_ind[g],t]) #needed for p_dr
+#GENMINDR
+    @constraint(m,[g = 1:n_gdr, t = 1:n_t],
+        p_dr[g,t] >= pmin[GDR[g]] * w[GDR_SL_ind[g],t])
+#TYPE3DR
+    # @constraint(m,type3dr[g=1:n_gdr,t = TIME, o = SCENARIOS],
+    #      p[GDR[g],t,o] == p_dr[g,t])
 end
 
 #START_S
@@ -501,6 +509,7 @@ if DRtype == 3 && DRrand
 elseif DRtype != 3 && DRrand
     error("DRrand can only be used with a DRtype of 3")
 end
+#TODO: make an elseif for DRype ==3 and !DRrand
 
 #STARTUP COUNT
 @constraint(m, [g=GENERATORS, t = TIME, o = SCENARIOS],

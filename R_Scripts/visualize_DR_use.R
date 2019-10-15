@@ -69,7 +69,7 @@ runIDs12 = c("advNot1_keyDays2","advNot2_keyDays2","advNot3_keyDays2", #9-30
              "advNot1_c2_keyDays2","advNot2_c2_keyDays2","advNot3_c2_keyDays2", #9-30,9-30,10-01
              "avail1_keyDays2","avail2_keyDays2","avail3_keyDays2", #10-02
              "hour1_keyDays2","hour2_keyDays2",
-             # "hour3_keyDays2", #10-02
+             "hour3_keyDays2", #10-02
              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2", #10-01
              "start1_keyDays2","start2_keyDays2","start3_keyDays2")#, #10-01
              # "rand_base") #10-01
@@ -77,6 +77,7 @@ runDates12 = c(rep("2019-09-30",3), #advnot
                rep("2019-09-30",2),"2019-10-01", #advnot_c2
                rep("2019-10-02",3), #avail
                rep("2019-10-02",2), #hour
+               "2019-10-02", #hour
                rep("2019-10-01",3), #energy
                rep("2019-10-01",3))#, #start
                # "2019-10-01") #rand_base
@@ -88,14 +89,17 @@ runDates13 = c("2019-10-02","2019-10-04",
 runIDs14 = c("noDR_keyDays2")
 runDates14 = "2019-10-08"
 
-runIDs = runIDs14#c(runIDs1,runIDs2)
-runDates = runDates14#c(runDates1, runDates2)
+runIDs15 = c("rand_u20pp","rand_u40pp","rand_u60pp","rand_u80pp")
+runDates15 = rep("2019-10-12",4)
+
+runIDs = c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_testDays" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
 ## run options
 summary_combine = T # needed to create prod.csv
-plotDR = F
+plotDR = T
 genbreakdown_only = F # this is done in summary_combine
 rampdata_df = F
 loadOverrideOption = F# should prod be re-calculated?
