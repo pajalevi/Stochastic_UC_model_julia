@@ -428,7 +428,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
            expectedCO2 = MWout * PLC2ERTA * prob) %>% # double check units
     group_by(speed,t) %>%
     summarise(ecost = sum(expectedcost),
-              eco2 = sum(expectedCO2))
+              eco2 = sum(expectedCO2, na.rm = T))
   
   # plot ##
   prodcostplot = prodcost %>%
@@ -444,7 +444,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   prodcosttot = prodcost %>%
     group_by(speed) %>%
     summarise(ecost = sum(ecost),
-              co2 = sum(eco2)) #%>%
+              co2 = sum(eco2, na.rm = T)) #%>%
     # spread(key=speed,value=ecost)
   slowseltot = which(prodcosttot$speed == "slow")
   fastseltot = which(prodcosttot$speed == "fast")
@@ -460,7 +460,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   #-------------------
   ## combined costs ##
-  names(prodcostplot) = c("speed","t","prod")
+  names(prodcostplot) = c("speed","t","prod","co2")
   names(startcostplot) = c("t","speed","startup")
   allcosts = merge(prodcostplot,startcostplot, by = c("t","speed"), all=T)
   allcosts = gather(allcosts, key = "cost_type", value = "cost", prod, startup)

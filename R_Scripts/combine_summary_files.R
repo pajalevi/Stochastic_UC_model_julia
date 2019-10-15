@@ -54,10 +54,10 @@ runIDs14 = c("noDR_keyDays2")
 runDates14 = "2019-10-08"
 
 runIDs15 = c("rand_u20pp","rand_u40pp","rand_u60pp","rand_u80pp")
-runDates15 = rep("2019-10-12",4)
+runDates15 = rep("2019-10-14",4)
 
-runIDs = c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs = runIDs15#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = runDates15#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####
