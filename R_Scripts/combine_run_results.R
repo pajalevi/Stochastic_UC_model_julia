@@ -17,6 +17,7 @@ if(SHRLK){
   baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
   outputFolBase  = "outputs/"
   inputFol = "inputs/"
+  scratch_output_fol = "/scratch/users/pjlevi/julia_outputs/INFORMS/"
 } else{
   baseFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
   outputFolBase = "Data/julia_output/forIAEE_1Pmin/"

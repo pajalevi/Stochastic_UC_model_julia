@@ -16,6 +16,7 @@ if(SHRLK){
   base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
   output_fol_base  = "outputs/"
   input_fol = "inputs/"
+  # scratch_output_fol = "/scratch/users/pjlevi/julia_outputs/INFORMS/"
 } else{
   base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
   output_fol_base = "Data/julia_output/forIAEE_1Pmin/"
@@ -67,7 +68,7 @@ runDates11 = c("2019-09-23",rep("2019-09-24",3))
 
 runIDs12 = c("advNot1_keyDays2","advNot2_keyDays2","advNot3_keyDays2", #9-30
              "advNot1_c2_keyDays2","advNot2_c2_keyDays2","advNot3_c2_keyDays2", #9-30,9-30,10-01
-             "avail1_keyDays2","avail2_keyDays2","avail3_keyDays2", #10-02
+             "avail1_keyDays2","avail2_keyDays2","avail3_keyDays2", "avail4_keyDays2", #10-02
              "hour1_keyDays2","hour2_keyDays2",
              "hour3_keyDays2", #10-02
              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2", #10-01
@@ -75,9 +76,9 @@ runIDs12 = c("advNot1_keyDays2","advNot2_keyDays2","advNot3_keyDays2", #9-30
              # "rand_base") #10-01
 runDates12 = c(rep("2019-09-30",3), #advnot
                rep("2019-09-30",2),"2019-10-01", #advnot_c2
-               rep("2019-10-02",3), #avail
+               rep("2019-10-02",4), #avail
                rep("2019-10-02",2), #hour
-               "2019-10-02", #hour
+               "2019-10-04", #hour
                rep("2019-10-01",3), #energy
                rep("2019-10-01",3))#, #start
                # "2019-10-01") #rand_base
@@ -92,8 +93,18 @@ runDates14 = "2019-10-08"
 runIDs15 = c("rand_u20pp","rand_u40pp","rand_u60pp","rand_u80pp")
 runDates15 = rep("2019-10-14",4)
 
-runIDs = runIDs15#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = runDates15#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs16 = c("avail1_c2_keyDays2","avail2_c2_keyDays2","avail3_c2_keyDays2","avail4_c2_keyDays2", #10-16
+             "hour1_c2_keyDays2","hour2_c2_keyDays2","hour3_c2_keyDays2", #10-16
+             "energy1_c2_keyDays2","energy2_c2_keyDays2","energy3_c2_keyDays2", #10-15
+             "start1_c2_keyDays2","start2_c2_keyDays2","start3_c2_keyDays2") #10-15
+runDates16 = c(rep("2019-10-16",7),
+               rep("2019-10-15",6))
+
+runIDs17 = c("advNot1_c2_keyDays2","advNot2_c2_keyDays2","advNot3_c2_keyDays2")
+runDates17 = rep("2019-10-17",3)
+
+runIDs = c(runIDs14)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates14)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_testDays" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
@@ -124,7 +135,13 @@ if(summary_combine){
   options(readr.num_columns = 0) # turn off read_csv messages
   for(r in 1:length(runIDs)){
     print(runIDs[r])
-    combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption)
+    # if(file.exists(paste(base_fol,outputFolBase,runIDs[r],"_",runDates[r]))){
+      combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption)
+    # } else if(file.exists(paste(scratch_output_fol,runIDs[r],"_",runDates[r]))) {
+      # combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption,
+                        # input_fol = scratch_)
+    # } else {error("file not found")}
+      
     print("Done, resting")
     Sys.sleep(15) #let the computer cool down
   }

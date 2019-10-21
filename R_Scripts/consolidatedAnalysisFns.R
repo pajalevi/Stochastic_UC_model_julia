@@ -28,9 +28,9 @@ if(!SHRLK){
 }
 plotDRUse = function(runID,runDate,drcommit,
                      inputfolID, outputfolID,
-                     scenarios = 3:8, # what scenarios will be graphed
-                     overlaplength = 12, #loadTimeseriesData param
-                     period = "p10_4524_4644", 
+                     scenarios = 1:5, # what scenarios will be graphed
+                     overlaplength = 6, #loadTimeseriesData param
+                     period = "p2_1020_1140", 
                      model_output_fol = modelOutputFol, 
                      model_input_fol = modelInputFol,
                      SHRLOK = SHRLK,
