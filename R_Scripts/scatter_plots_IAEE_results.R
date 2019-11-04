@@ -44,7 +44,9 @@ ggplot(drstats,aes(x=Category,y=`Savings Percent`, color = Category)) +
   geom_jitter(width = 0.03) + 
   scale_y_continuous(labels = scales::percent) + theme_minimal() +
   # scale_color_brewer(palette = "Dark2") +
-  scale_color_manual(values = modpalette3) +
+  scale_color_manual(values = modpalette3)  +
+  theme(panel.grid.minor.y=element_blank(),
+        panel.grid.major.y=element_blank())+
   labs(y = "Savings from adding DR") +
   ggtitle("System cost reductions from different DR Types")
 ggsave(filename = paste0(plotfile,"scatter_total_savings_category_type.png"), width = 5.3, height = 4)
@@ -82,7 +84,9 @@ ggplot(drstats,aes(x=Category,y=`Commitment Hours`/tothrs, color = `Limit Type`,
   # scale_color_brewer(palette = "Dark2") +
   # scale_color_viridis(discrete = T, option = "E")+
   scale_alpha_discrete(range = c(0.35,1)) +
-  scale_color_manual(values = modpalette)+
+  scale_color_manual(values = modpalette) +
+  theme(panel.grid.minor.y=element_blank(),
+        panel.grid.major.y=element_blank())+
   ggtitle("Overcommitment by some types of DR") + 
   labs(y="Percent of all hours DR is commited")
 

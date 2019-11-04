@@ -67,8 +67,21 @@ runDates16 = c(rep("2019-10-16",7),
 runIDs17 = c("advNot1_c2_keyDays2","advNot2_c2_keyDays2","advNot3_c2_keyDays2")
 runDates17 = rep("2019-10-17",3)
 
-runIDs = c(runIDs14)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates14)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs18 = rep("advNot1_keyDays2",4)
+runDates18 = c("2019-10-21-v1","2019-10-21-v2","2019-10-21-v3","2019-10-21-v4")
+runDates18b = c("2019-10-23-v5","2019-10-23-v6","2019-10-23-v7","2019-10-23-v8")
+
+rrunIDs19 = c("avail1_keyDays2","avail2_keyDays2","avail3_keyDays2","avail4_keyDays2", #10-16
+              "hour1_keyDays2",#"hour2_keyDays2","hour3_keyDays2", #10-16
+              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2", #10-15
+              "start1_keyDays2","start2_keyDays2","start3_keyDays2",
+              rep("rand_u20pp",3)) #10-15
+runDates19 = c(rep("2019-10-30",11),
+               paste0("2019-10-30-v",c(1,2,3)))
+
+
+runIDs = c(runIDs19)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates19)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####

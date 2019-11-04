@@ -406,7 +406,8 @@ m = Model(solver=GurobiSolver(Presolve=0, Method=1,
                               # MIPFocus=3,
                               MIPGap=0.0003,
                               NodefileStart = 0.05,
-                              NodefileDir = "/scratch/users/pjlevi/gurobi_solving_outputs/"))
+                              NodefileDir = "/scratch/users/pjlevi/gurobi_solving_outputs/",
+                              Seed = convert(Int64,abs(floor(rand(Float64)*2000000000)))))
                 # can also try reducing threadcount, reducing nodefilestart
 if no_vars
     error("just testing model so we are stopping here")
