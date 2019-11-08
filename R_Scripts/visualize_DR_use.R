@@ -66,6 +66,7 @@ runIDs11 = c("rand_test","newGen_newSett_ARMAtest1",
              "newGen_newSett_ARMAtest2","newGen_newSett_ARMAtest3")
 runDates11 = c("2019-09-23",rep("2019-09-24",3))
 
+#INFORMS main results
 runIDs12 = c("advNot1_keyDays2","advNot2_keyDays2","advNot3_keyDays2", #9-30
              "advNot1_c2_keyDays2","advNot2_c2_keyDays2","advNot3_c2_keyDays2", #9-30,9-30,10-01
              "avail1_keyDays2","avail2_keyDays2","avail3_keyDays2", "avail4_keyDays2", #10-02
@@ -82,17 +83,22 @@ runDates12 = c(rep("2019-09-30",3), #advnot
                rep("2019-10-01",3), #energy
                rep("2019-10-01",3))#, #start
                # "2019-10-01") #rand_base
+
+#INFORMS extra results that looked weird so I didn't use them... except for hour3?
 runIDs13 = c("hour3_keyDays2", "medRE_keyDays2",
              "rand_u40pp","rand_u60pp","rand_u80pp")
 runDates13 = c("2019-10-02","2019-10-04",
                rep("2019-10-08",3))
 
+# noDR comparison for INFORMS results
 runIDs14 = c("noDR_keyDays2")
 runDates14 = "2019-10-08"
 
+# not sure
 runIDs15 = c("rand_u20pp","rand_u40pp","rand_u60pp","rand_u80pp")
 runDates15 = rep("2019-10-14",4)
 
+# Cost sensitivity runs for INFORMS that looked weird so I didnt use them
 runIDs16 = c("avail1_c2_keyDays2","avail2_c2_keyDays2","avail3_c2_keyDays2","avail4_c2_keyDays2", #10-16
              "hour1_c2_keyDays2","hour2_c2_keyDays2","hour3_c2_keyDays2", #10-16
              "energy1_c2_keyDays2","energy2_c2_keyDays2","energy3_c2_keyDays2", #10-15
@@ -107,18 +113,23 @@ runIDs18 = rep("advNot1_keyDays2",4)
 runDates18 = c("2019-10-21-v1","2019-10-21-v2","2019-10-21-v3","2019-10-21-v4")
 runDates18b = c("2019-10-23-v5","2019-10-23-v6","2019-10-23-v7","2019-10-23-v8")
 
-runIDs19 = c("avail1_keyDays2","avail2_keyDays2","avail3_keyDays2","avail4_keyDays2", #10-16
-             "hour1_keyDays2",#"hour2_keyDays2","hour3_keyDays2", #10-16
+runIDs19 = c("noDR_keyDays2","noDR_keyDays2","avail1_keyDays2","avail2_keyDays2","avail3_keyDays2","avail4_keyDays2", #10-16
+             "hour1_keyDays2","hour2_keyDays2","hour3_keyDays2", #10-16
              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2", #10-15
              "start1_keyDays2","start2_keyDays2","start3_keyDays2",
              rep("rand_u20pp",3)) #10-15
-runDates19 = c(rep("2019-10-30",11),
+runDates19 = c("2019-11-04",rep("2019-10-30",14),
                paste0("2019-10-30-v",c(1,2,3)))
 
+# testing effect of removing newer inputs from input files
+runIDs20 = c("noDR_keyDays2","advNot1_keyDays2",
+             "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2")
+runDates20 = rep("2019-11-07",5)
 
-runIDs = c(runIDs19[11:15])#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates19[11:15])#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
-inputfolID = "5d_6o_testDays" # for plotDR - need to fix to read in dynamically.
+
+runIDs = c(runIDs20)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates20)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
 ## run options

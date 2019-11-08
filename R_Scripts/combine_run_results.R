@@ -119,6 +119,9 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   # initialize summary output file
   write("output_type, output_value",file = paste0(output_fol,"summary_stats",runID,".csv"))
+  # write file name and date
+  write(paste0("folder name,",outputID,"\n "),
+        file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
   
   # match comt decision with capacity
@@ -492,7 +495,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   write(paste0("all costs slow gens,",allcosttot$slow[1],"\n",
                "expected fast all costs,",allcosttot$fast[1],"\n",
                "expected DR all costs,",allcosttot$DR[1],"\n",
-               "expected Total costs,",allcosttot$DR[1] + allcosttot$fast[1] +allcosttot$slow[1],"\n",
+               "expected Total costs,",sum(allcosttot$DR[1] + allcosttot$fast[1] +allcosttot$slow[1],na.rm=T),"\n",
                "Hours DR is on,", sum(dron),"\n",
                "Hours DR is >1% on,",sum(drsome),"\n",
                "Hours DR is >50% on,",sum(drpart),"\n",

@@ -2,8 +2,9 @@
 
 # load model data
 library(tidyverse)
-library(viridis)
 library(data.table)
+source("./getModelParams.R")
+# library(stringr)
 
 SHRLK = TRUE
 
@@ -71,21 +72,27 @@ runIDs18 = rep("advNot1_keyDays2",4)
 runDates18 = c("2019-10-21-v1","2019-10-21-v2","2019-10-21-v3","2019-10-21-v4")
 runDates18b = c("2019-10-23-v5","2019-10-23-v6","2019-10-23-v7","2019-10-23-v8")
 
-rrunIDs19 = c("avail1_keyDays2","avail2_keyDays2","avail3_keyDays2","avail4_keyDays2", #10-16
-              "hour1_keyDays2",#"hour2_keyDays2","hour3_keyDays2", #10-16
-              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2", #10-15
-              "start1_keyDays2","start2_keyDays2","start3_keyDays2",
-              rep("rand_u20pp",3)) #10-15
-runDates19 = c(rep("2019-10-30",11),
+runIDs19 = c("noDR_keyDays2","noDR_keyDays2","avail1_keyDays2","avail2_keyDays2","avail3_keyDays2","avail4_keyDays2", #10-16
+             "hour1_keyDays2","hour2_keyDays2","hour3_keyDays2", #10-16
+             "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2", #10-15
+             "start1_keyDays2","start2_keyDays2","start3_keyDays2",
+             rep("rand_u20pp",3)) #10-15
+runDates19 = c("2019-11-04",rep("2019-10-30",14),
                paste0("2019-10-30-v",c(1,2,3)))
 
 
-runIDs = c(runIDs19)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates19)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+# testing effect of removing newer inputs from input files
+runIDs20 = c("noDR_keyDays2","advNot1_keyDays2",
+             "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2")
+runDates20 = rep("2019-11-07",5)
+
+
+runIDs = c(runIDs20)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates20)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####
-combineSummaryFiles = function(runIDs, runDates, SHRLK){
+combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scratch/users/pjlevi/julia_outputs/INFORMS/"){
   if(SHRLK){
     base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
     output_fol_base  = "outputs/"
@@ -99,12 +106,21 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK){
   }
   allinputs = read_csv(inputs_file)
   
-  
   for(i in 1:length(runIDs)){
     print(runIDs[i])
     # load summary file
-    summaryfile = read_csv(paste0(base_fol,output_fol_base,runIDs[i],"_",runDates[i],
-                                  "/summary_stats",runIDs[i],".csv"))
+    summaryFilePath = paste0(runIDs[i],"_",runDates[i],"/summary_stats",runIDs[i],".csv")
+    if(file.exists(paste0(base_fol,output_fol_base,summaryFilePath))){
+      summaryfile = read_csv(paste0(base_fol,output_fol_base,summaryFilePath))
+      HOME = TRUE
+    } else if(file.exists(paste0(SCRATCH,summaryFilePath))){ #does summary file and output folder live in SCRATCH?
+      summaryfile = read_csv(paste0(SCRATCH,summaryFilePath))
+      HOME = FALSE
+    } else if(file.exists(paste0(SCRATCH,runIDs[i],"_",runDates[i]))){
+      stop(paste0("File ",runIDs[i],"_",runDates[i]," exists in SCRATCH, but there is no summary file"))
+    } else {
+      stop(paste0("File ",runIDs[i],"_",runDates[i]," either lives in HOME but doesn't have a summary file, or doesn't exist"))
+    }
     
     # clean summary file
     
@@ -114,16 +130,60 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK){
     # name cols of alloutputs if needed
     if(i==1){
       # create outputs matrix
-      alloutputs = as_tibble(matrix(nrow = length(runIDs), ncol = 1+ nrow(params) + nrow(summaryfile)))
-      
+      alloutputs = as_tibble(matrix(nrow = 1, ncol = 1+ nrow(params) + nrow(summaryfile)))
       names(alloutputs) = c("runID",params$input_name,summaryfile$output_type)
+      alloutputs[i,] = c(runIDs[i],params[[2]],summaryfile[[2]]) 
+    } else {
+      # bind a new row
+      newoutputs = as_tibble(matrix(nrow = 1, ncol = 1+ nrow(params) + nrow(summaryfile)))
+      names(newoutputs) = c("runID",params$input_name,summaryfile$output_type)
+      newoutputs[1,] = c(runIDs[i],params[[2]],summaryfile[[2]]) 
+      alloutputs = bind_rows(alloutputs,newoutputs)
     }
     
-    # combine with previous data
-    alloutputs[i,] = c(runIDs[i],params[[2]],summaryfile[[2]])
-      
   }
   
+  ## calculate new outputs if noDR run present##
+    # make TYPE column for easier plotting. grep the first number or _ in runID
+    alloutputs$type = substr(alloutputs$runID,1,regexpr("[0-9_]",alloutputs$runID)-1)
+    # expected MWh shed
+    alloutputs$`Expected MWh Shed by DR` = as.numeric(alloutputs$`expected DR prod costs`)/as.numeric(alloutputs$`dr_varcost`)
+    # expected hours DR is on
+    alloutputs$`Expected hours DR is committed` = as.numeric(alloutputs$`Hours DR is on`)/as.numeric(alloutputs$nrandp)
+  
+  ## For outputs that require reference to noDR
+    # repair NA `expected Total costs` columns
+    repairsel = which(is.na(alloutputs$`expected Total costs`))
+    alloutputs$`expected Total costs` = rowSums(cbind(as.numeric(alloutputs$`all costs slow gens`), 
+                                            as.numeric(alloutputs$`expected fast all costs`), 
+                                            as.numeric(alloutputs$`expected DR all costs`)), na.rm = T)
+    
+    # identify noDR row
+    noDR_row = which(str_detect(alloutputs$runID,"noDR")) # if there are multiple noDR rows, use first one
+    if(length(noDR_row) > 0){ 
+      noDR_row = noDR_row[1]
+      # total cost savings rel to noDR, absolute and as pct
+      alloutputs$`expected Total costs` = as.numeric(alloutputs$`expected Total costs`)
+      alloutputs$`Expected cost reduction from DR` = alloutputs$`expected Total costs`[noDR_row] - alloutputs$`expected Total costs`
+      alloutputs$`Expected cost reduction from DR, frac` = 
+        (alloutputs$`expected Total costs`[noDR_row] - alloutputs$`expected Total costs`)/alloutputs$`expected Total costs`[noDR_row]
+      
+      # cost reduction per MWh shed
+        # mwh shed is DR prod cost / dr_varcost
+      alloutputs$`Expected cost reduction per MWh shed` = alloutputs$`Expected cost reduction from DR` / alloutputs$`Expected MWh Shed by DR`
+      
+      # CO2 reduction rel to noDR
+      alloutputs$`Total CO2 emissions` = as.numeric(alloutputs$`expected slow CO2 emissions`) + 
+        as.numeric(alloutputs$`expected fast CO2 emissions`) + as.numeric(alloutputs$`expected DR CO2 emissions`)
+      alloutputs$`Expected CO2 reduction from DR` = alloutputs$`Total CO2 emissions`[noDR_row] - alloutputs$`Total CO2 emissions`
+    }
+    
+
+  ## add in model params ##
+  # MAKE A FN TO DO THIS. fn inputs: date, model run. fn outputs: tibble of model params
+  params = getModelParams(run_dates = runDates,run_names = runIDs, randTF = as.logical(alloutputs$DRrand))
+  alloutputs = cbind(alloutputs, params)
+  
   # save
-  write_csv(alloutputs,paste0(base_fol,output_fol_base,"combined_summary.csv"))
+  write_csv(alloutputs,paste0(base_fol,output_fol_base,"combined_summary.csv")) # regardless of where output files are, this will be saved in HOME directories
 }
