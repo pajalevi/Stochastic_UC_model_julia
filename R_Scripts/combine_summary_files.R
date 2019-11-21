@@ -86,9 +86,11 @@ runIDs20 = c("noDR_keyDays2","advNot1_keyDays2",
              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2")
 runDates20 = rep("2019-11-07",5)
 
+runIDs21 = c("advNot2_keyDays2","advNot3_keyDays2")
+runDates21 = rep("2019-11-15",2)
 
-runIDs = c(runIDs20)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates20)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs = c(runIDs16,runIDs21,runIDs14)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates16,runDates21,runDates14)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####

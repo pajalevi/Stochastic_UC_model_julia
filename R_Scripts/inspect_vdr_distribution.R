@@ -21,14 +21,23 @@ for(pp in 1:length(pps)){
 # there are 90 rows of NA at the bottom of vdr_inputs
 # there are 2160 rows total
 nhours = 2160-90
+vdr_inputs = vdr_inputs[,1:nhours,]
 
 # take sums across second dimension
 dimnames(vdr_inputs) = list(paste0("pp0.",pps),c(),paste0("o",1:5))
 
 vdrsum = apply(vdr_inputs,c(1,3),sum,na.rm=T)/nhours
 # dimnames(vdrsum) = list(paste0("pp0.",pps),paste0("o",1:5))
-print(rowsum(vdrsum))
-vdravg = apply(vdr)
+print(vdrsum)
+print(rowSums(vdrsum)/5)
+# vdravg = apply(vdr)
+
+# examine SD of distributions
+vdrsd = apply(vdr_inputs,1,sd,na.rm=T)/nhours
+print(2*vdrsd)
+barplot(height = vdrsd)
+
+vdr2d = array_reshape(vdr_inputs,dim = c())
 
 # plot
 barplot(height =max(rowSums(vdrsum))-rowSums(vdrsum))

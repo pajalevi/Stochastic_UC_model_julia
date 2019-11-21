@@ -53,7 +53,7 @@ using DataFrames
 using CSV
 using JLD2
 include("convert3dto2d.jl")
-include("make_scenarios.jl")
+include("make_scenarios_rejection_sample.jl")
 include("writecsvmulti.jl")
 include("combine_scenarios.jl")
 

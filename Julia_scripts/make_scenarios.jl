@@ -63,10 +63,10 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length; randsel = true, nrand 
     # create vdr[t,o]
     # - each row is a timestep
     # - each column is an outcome
-    #vdr = Array{Float64}(n_timesteps,n_new_scenarios) #this fills array with random small values
+    # vdr = Array{Float64}(n_timesteps,n_new_scenarios) #this fills array with random small values
     # vdr = fill(0.0,(n_timesteps,n_new_scenarios))
-    # iterate through columns
-    # need to ensure that this matrix is constructed EXACTLY the same way as p above
+    # # iterate through columns
+    # # need to ensure that this matrix is constructed EXACTLY the same way as p above
     # for i in 1:Tp
     #     # identify which rows belong to this time period
     #     if i == Tp

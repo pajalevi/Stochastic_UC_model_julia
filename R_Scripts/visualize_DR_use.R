@@ -126,9 +126,11 @@ runIDs20 = c("noDR_keyDays2","advNot1_keyDays2",
              "energy1_keyDays2","energy2_keyDays2","energy3_keyDays2")
 runDates20 = rep("2019-11-07",5)
 
+runIDs21 = c("advNot2_keyDays2","advNot3_keyDays2")
+runDates21 = rep("2019-11-15",2)
 
-runIDs = c(runIDs20)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates20)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs = c(runIDs21)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates21)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
