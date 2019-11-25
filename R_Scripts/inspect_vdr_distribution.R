@@ -28,19 +28,19 @@ dimnames(vdr_inputs) = list(paste0("pp0.",pps),c(),paste0("o",1:5))
 
 vdrsum = apply(vdr_inputs,c(1,3),sum,na.rm=T)/nhours
 # dimnames(vdrsum) = list(paste0("pp0.",pps),paste0("o",1:5))
-print(vdrsum)
+print(1-vdrsum)
 print(rowSums(vdrsum)/5)
 # vdravg = apply(vdr)
 
 # examine SD of distributions
-vdrsd = apply(vdr_inputs,1,sd,na.rm=T)/nhours
-print(2*vdrsd)
+vdrsd = apply(vdr_inputs,1,sd,na.rm=T)
+print(vdrsd)
 barplot(height = vdrsd)
 
 vdr2d = array_reshape(vdr_inputs,dim = c())
 
 # plot
-barplot(height =max(rowSums(vdrsum))-rowSums(vdrsum))
+barplot(height =max(rowSums(vdrsum)/5)-rowSums(vdrsum)/5)
 
 vdrmean = apply(vdr_inputs,1,mean,na.rm=T)
 barplot(height = 1-vdrmean)

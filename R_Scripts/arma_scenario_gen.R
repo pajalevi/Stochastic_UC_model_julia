@@ -1,6 +1,8 @@
 # make_acf_scenarios.R
 # generate error scenarios 
 
+# NB: gen_arma.R has the more up-to-date version of gen_arma
+
 
 errsel16 = !is.na(dercot[,"errorfrac"]) & dercot$year==2016
 errf = dercot[errsel16,"errorfrac"]
@@ -108,8 +110,8 @@ gen_arma = function(period_file,period_fol,p,q,err_data,nsim, xarma=NULL){
 }
 
 # load period files
-period_dir = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/5d_keyDays/"
-period_dir = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/5d_6o_periods/"
+period_dir = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/5d_6o_keyDays2/"
+# period_dir = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/5d_6o_periods/"
 all_files = list.files(path=period_dir, pattern = "periods")
 # 
 

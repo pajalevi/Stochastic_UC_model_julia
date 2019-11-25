@@ -366,7 +366,7 @@ GDR_SL_ind = findin(GSL,GDR)
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Presolve=0, Method=1, 
+m = Model(solver=GurobiSolver(Method=1, 
                              # MIPFocus=1,
                               # MIPGap=0.00015,
                               #NodefileStart = 0.5,

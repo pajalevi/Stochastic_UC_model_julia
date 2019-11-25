@@ -21,13 +21,13 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length; randsel = true, nrand 
 
     # make vdr placeholder and all_s
     vdr = fill(0.0,(n_timesteps,nrand))
-    p = fill(0.0,(n_rand))
+    p = fill(0.0,(nrand))
     all_s = collect(1:n_new_scenarios)
 
     # rejection sample
     i=1;
     n_sampled = 0
-    while i<n_new_scenarios && n_sampled < n_rand
+    while i<n_new_scenarios && n_sampled < nrand
         # draw a single sample
         s = sample(all_s,1)
         println("sampled ",s)
@@ -66,7 +66,7 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length; randsel = true, nrand 
         if abs(1-mean(s_vdr,weights(s_p))) < thresh #mean is weighted by probability
             # add to vdr and p
             vdr[:,n_sampled+1] = s_vdr
-            p[,n_sampled+1] = s_p
+            p[:,n_sampled+1] = prod(s_p)
             # update n_sampled
             n_sampled = n_sampled+1
             println("added sample ",s)
