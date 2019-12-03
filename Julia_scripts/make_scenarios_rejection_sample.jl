@@ -33,7 +33,6 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length; randsel = true, nrand 
         println("sampled ",s)
 
         # make vdr data for that sample
-        # TODO: calculate probability for that sample
         s_vdr = fill(0.0,(n_timesteps))
         s_p = fill(0.0,(n_timesteps))
         for j in 1:Tp #row chunk
@@ -66,7 +65,7 @@ function make_scenarios(n_timesteps,v_og,p_og,int_length; randsel = true, nrand 
         if abs(1-mean(s_vdr,weights(s_p))) < thresh #mean is weighted by probability
             # add to vdr and p
             vdr[:,n_sampled+1] = s_vdr
-            p[:,n_sampled+1] = prod(s_p)
+            p[n_sampled+1] = prod(s_p)
             # update n_sampled
             n_sampled = n_sampled+1
             println("added sample ",s)

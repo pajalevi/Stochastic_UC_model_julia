@@ -38,6 +38,9 @@ function combine_scenarios(dr_scenarios, dr_p, nd_scenarios, nd_p)
 
     end
 
+    # normalize prob_array
+    prob_array = prob_array/sum(prob_array)
+
     return(vdr,vnd,prob_array)
 end
 

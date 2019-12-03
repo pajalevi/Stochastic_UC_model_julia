@@ -172,6 +172,9 @@ DRtype = parse(Int64,inputs[1,:DRtype])
 nrandp = parse(Int64,inputs[1,:nrandp])
 int_length = parse(Int64,inputs[1,:intlength])
 debug = !parse(Bool, lowercase(inputs[1,:solve_model]))
+MIPFocusParam = parse(Bool,lowercase(inputs[1,:MIPFocusParam]))
+MIPGapParam = parse(Bool,lowercase(inputs[1,:MIPGapParam]))
+NodefileStartParam = parse(Bool,lowercase(inputs[1,:NotefileStartParam]))
 
 if Sherlock
     output_fol = string(sherlock_fol, sherlock_output_file, input_version,"_",submitdate,"/")
@@ -366,15 +369,12 @@ GDR_SL_ind = findin(GSL,GDR)
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Method=1, 
-                             # MIPFocus=1,
-                              # MIPGap=0.00015,
-                              #NodefileStart = 0.5,
-                              Seed = convert(Int64,abs(floor(rand(Float64)*2000000000)))
-                              )
-          )#,
-                              #NodefileDir = "/scratch/users/pjlevi/gurobi_solving_outputs/"))
-                # can also try MIPFocus=3
+m = Model(solver=GurobiSolver(Method=1,
+                              MIPFocus=MIPFocusParam,#3,
+                              MIPGap=MIPGapParam,#0.0003,
+                              NodefileStart = NodefileStartParam,#0.05,
+                              NodefileDir = "/scratch/users/pjlevi/gurobi_solving_outputs/",
+                              Seed = convert(Int64,abs(floor(rand(Float64)*2000000000)))))
 
 if no_vars
     error("just testing model so we are stopping here")
