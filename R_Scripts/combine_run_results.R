@@ -51,14 +51,17 @@ combineRunResults <- function(runID, runDate, graphs = T,
   default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
   
   # get input parameters ####
-  if(!SHRLOK){
-    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv") # FIX ME
-  }else{
-    inputs_file =  paste0(base_fol,"/code/inputs_ercot.csv")
-  }
-  allinputs = read_csv(inputs_file)
-  params = allinputs[,c("input_name",runID)]
-  params = spread(params, key = input_name, value = runID)
+  # TODO: instead, get this from the file that is saved alongside outputs, instead of from inputs file.
+  #       1: scrape names of all files that are inputfile*
+  #       2: assume they're all the same, read in the first one
+  #       3: massage the format of that one so that is looks like params does now. Voila!
+  inputfilename = list.files(path = output_fol,pattern = "inputfile*")[1]
+  inputs = read_csv(paste0(output_fol,inputfilename))
+  # trim off useless third column
+  print(paste("inputs has ",ncol(inputs),"columns, file name is ", inputfilename))
+  inputs = inputs[,1:2]
+  
+  params = spread(inputs, key = input_name, value = runID)
   params$nrandp = as.numeric(params$nrandp)
   overlaplength = as.numeric(params$overlapLength)
   if(is.null(endtrim)){
@@ -123,6 +126,10 @@ combineRunResults <- function(runID, runDate, graphs = T,
   write(paste0("folder name,",outputID,"\n "),
         file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)  
   
+  # add params
+  print("writing params")
+  write.table(inputs, sep=",", row.names = FALSE, col.names = FALSE, quote = FALSE,
+            file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)
   
   # match comt decision with capacity
   # gather gen names
@@ -322,9 +329,16 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   #---------------------------------
   ## consolidated data of generation source: fuelBreakdown() ####
-  fuelBreakdown(prod2,paste0(base_fol,output_fol_base,"plots/"),runID)
-  paste0(base_fol,output_fol_base,"plots/")
+  genbreakdown = fuelBreakdown(prod2,paste0(base_fol,output_fol_base,"plots/"),runID)
+  genbreakdown = select(genbreakdown, Fuel, prodFrac)
+  genbreakdown$Fuel = paste0("GENFRAC-",genbreakdown$Fuel)
+  # paste0(base_fol,output_fol_base,"plots/")
   rm(prod2) # memory mangement
+  
+  ## write fuelBreakdown to summary stats ##
+  write.table(genbreakdown,sep=",", row.names = FALSE, col.names = FALSE, quote = FALSE,
+              file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)
+  
     #### TODO: collect cost information ####
   
   # need to infer costs from production, startup info

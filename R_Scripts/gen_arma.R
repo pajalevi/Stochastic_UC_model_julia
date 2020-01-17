@@ -108,7 +108,7 @@ q=0
 xarma = arima(errf, order = c(p,0,q))
 for(i in 1:length(all_files)){
   print(all_files[i])
-  gen_arma(period_dir,period_file = all_files[i],xarma,err_data = errf,nsim=25)
+  gen_arma(period_dir,period_file = all_files[i],xarma,err_data = errf,nsim=20)
 }
 
 # visualize scenarios:

@@ -39,6 +39,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
 
   all_files = list.files(path=output_fol, pattern = dataType)
   nfiles = length(all_files)
+  print(paste("there are ",nfiles," files"))
   if(nfiles == 0) { stop("no files found matching dataType ", dataType, " in folder ", output_fol)}
   # ID which files are overlapping
   allperiodinfo = str_split(all_files,"_|\\.|-|p",simplify=T)
@@ -115,7 +116,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       } else{ stop("dataStage ", dataStage," is invalid. must be 1 or 2")}
       
       # trim output
-      if(periodnum ==1){ ## is this the first period? 
+      if(i ==1){ ## is this the first period? 
         
         print(paste("period",periodnum, "encompassing",firstperiod,"-",lastperiod,"is the first period"))
         if(prev_overlap[i] > 0){ #does it overlap with second period
@@ -155,7 +156,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
           }
         } else { # does not overlap with previous period
           print(paste("period number",periodnum,"does not overlap with previous period"))
-          if(periodnum==nfiles){ # is it the last period?
+          if(i==nfiles){ # is it the last period?
             # trim beginning with endtrim
             # trim end with endtrim
             tSel = which(output$t >= firstperiod + endtrim & 

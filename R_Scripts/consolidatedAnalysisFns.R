@@ -26,11 +26,11 @@ if(!SHRLK){
   modelOutputFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
   modelInputFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/"
 }
-plotDRUse = function(runID,runDate,drcommit,
+
+plotDRUse = function(runID,runDate,
                      inputfolID, outputfolID,
                      scenarios = 1:5, # what scenarios will be graphed
-                     overlaplength = 6, #loadTimeseriesData param
-                     period = "p2_1020_1140", 
+                     overlaplength = 6, endtrim=NULL, #loadTimeseriesData param
                      model_output_fol = modelOutputFol, 
                      model_input_fol = modelInputFol,
                      SHRLOK = SHRLK,
@@ -57,16 +57,18 @@ plotDRUse = function(runID,runDate,drcommit,
   allinputs = read_csv(inputs_file)
   params = allinputs[,c("input_name",runID)]
   params = spread(params, key = input_name, value = runID)
+  
+  if("overlaplength" %in% names(params)) {overlaplength = params$overlaplength}
+  
+  if(is.null(endtrim)){
+    endtrim = overlaplength/2
+    print(paste("endtrim set to", endtrim))
+  }
+  
   ##
   
   # load DR production
   drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID)
-  
-  # ggplot(drprod, aes(x=t,y=value)) + facet_wrap(~scenario) + geom_point()
-  # ggplot(filter(drprod,nperiod=="10"), aes(x=t,y=value)) + facet_wrap(~scenario) + 
-  #   geom_line() +
-  #   ggtitle(paste(runID, "Period 10 DR production"))#+ 
-  # coord_cartesian(xlim=c(5000,6000))
   
   # load and set up demand #
   periodinfo = strsplit(period,"p|_")[[1]] 
@@ -74,8 +76,14 @@ plotDRUse = function(runID,runDate,drcommit,
   firstperiod = as.numeric(periodinfo[3])
   lastperiod = as.numeric(periodinfo[4])
   dem_base = read_csv(paste0(model_input_fol,"ercot_default/ercot_demand_2016.csv"))
-  demchange = read_csv(paste0(instance_in_fol,"demandScenarios_vdem_ARMA26.0_",period,".csv")) 
+  demchange = read_csv(paste0(instance_in_fol,"demandScenarios_vdem_ARMA26.0_",period,".csv"))
+#TODO: read in ALL ARMA scenarios into demchange, add a t column
+  # Complication -- these will have overlap! they will not be the same (by scenario) when they overlap, so need to apply endtrim/overlap rules
+  # can I use loadTimeseriesData? check format.
   demrealo1 = dem_base$demand[firstperiod:lastperiod] * demchange$V1
+  
+#TODO: do I really need both demreal and demrealo1? probably not, consolidate.
+#TODO: before creating demreal, subselect dem_base for the timesteps included in the demchange data/in the modeled periods
   demreal = dem_base$demand[firstperiod:lastperiod] * demchange
   demreal$t = firstperiod:lastperiod
   demreal = gather(demreal,key = "scenario",value = "demand",-t) 
@@ -86,6 +94,7 @@ plotDRUse = function(runID,runDate,drcommit,
   drprodoneperiod$scenarionum = substr(drprodoneperiod$scenario,2,4)
   demprod = merge(demreal,drprodoneperiod,by=c("t","scenarionum")) 
   
+#TODO: adjust plotting to be full timeframe, add vertical lines separating periods
   # plot demand and DR production
   ggplot(filter(demprod,scenarionum %in% scenarios))+ 
     facet_wrap(~scenario.x) + 
@@ -220,4 +229,76 @@ rampInfo = function(prodgendat,runName){
   output = bind_rows(prodrampRE,prodrampREspeed)
   output$runName = runName
   return(output)
+}
+
+
+drDispatchStats = function(runID,runDate,
+                           inputfolID, 
+                           scenarios = 1:5, # what scenarios will be graphed
+                           overlaplength = 6, #loadTimeseriesData param
+                           period = "p2_1020_1140", 
+                           model_output_fol = modelOutputFol, 
+                           model_input_fol = modelInputFol,
+                           SHRLOK = SHRLK,
+                           base_fol = baseFol, endtrim=NULL){
+  # desired outputs:
+  #   how many events happen per period
+  #   how many events happen total?
+  #   what is the distribution of the event length?
+  #   what is the distribution of dispatch level (eg 0%-100%)
+  
+  # how should I deal with scenarios? median or mean? and max? look into some fancy plotting with error bars for max and min?
+  
+  # check filepaths
+  plot_fol = paste0(model_output_fol,"plots/")
+  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+  
+  instance_in_fol = paste0(model_input_fol,inputfolID,"/")
+  if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist ", instance_in_fol)}
+  outputfolID = paste0(runID,"_",runDate)
+  output_fol = paste0(model_output_fol,outputfolID,"/")
+  # dir.exists(output_fol)
+  
+  # load params
+  inputfilename = list.files(path = output_fol,pattern = "inputfile*")[1]
+  inputs = read_csv(paste0(output_fol,inputfilename))
+  # trim off useless third column
+  print(paste("inputs has ",ncol(inputs),"columns, file name is ", inputfilename))
+  inputs = inputs[,1:2]
+  params = spread(inputs, key = input_name, value = runID)
+  
+  if("overlaplength" %in% names(params)) {overlaplength = params$overlaplength
+  } else { warning("No overlaplength in inputfile for ",outputfolID, ", using default")}
+  
+  if(is.null(endtrim)){
+    endtrim = overlaplength/2
+    print(paste("endtrim set to", endtrim))
+  }
+  
+  # load DR production
+  drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID,endtrim)
+  
+  # load DR commitment
+  allcomt = loadTimeseriesData(output_fol,"u_commitment",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID,endtrim)
+  drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
+  rm(allcomt) #memory management
+  
+  # Create a set of columns identifying event # for each scenario
+  # and a second set of columns identifying, for each event, how many hours into the event we are
+  hours = sort(unique(drprod$t))
+  for(i in 1:length(hours)){
+    # probably easier to do this with binary commitment data...
+    # we want to count the transition from 0 to nonzero.
+    # when that occurs, (t)-(t-1) == (t)
+    # could iterate across all scenarios, and within each do step by step analysis
+    # after each one, merge in the event column... need to make sure it does not overwrite
+    
+    # would realllly like to know how I did this for CPUC
+    # should I table this till tomorrow?
+  }
+  
+  # identify mean/max/min number of events across scenarios
+  
+  # identify mean/max/min event length across scenarios
+  
 }

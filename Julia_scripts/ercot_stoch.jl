@@ -172,9 +172,10 @@ DRtype = parse(Int64,inputs[1,:DRtype])
 nrandp = parse(Int64,inputs[1,:nrandp])
 int_length = parse(Int64,inputs[1,:intlength])
 debug = !parse(Bool, lowercase(inputs[1,:solve_model]))
-MIPFocusParam = parse(Bool,lowercase(inputs[1,:MIPFocusParam]))
-MIPGapParam = parse(Bool,lowercase(inputs[1,:MIPGapParam]))
-NodefileStartParam = parse(Bool,lowercase(inputs[1,:NotefileStartParam]))
+MIPFocusParam = parse(Int64,inputs[1,:MIPFocusParam])
+MIPGapParam = parse(Float64,inputs[1,:MIPGapParam])
+NodefileStartParam = parse(Float64,inputs[1,:NodefileStartParam])
+MethodParam = parse(Int64,inputs[1,:MethodParam])
 
 if Sherlock
     output_fol = string(sherlock_fol, sherlock_output_file, input_version,"_",submitdate,"/")
@@ -369,7 +370,7 @@ GDR_SL_ind = findin(GSL,GDR)
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Method=1,
+m = Model(solver=GurobiSolver(Method=MethodParam,#1,
                               MIPFocus=MIPFocusParam,#3,
                               MIPGap=MIPGapParam,#0.0003,
                               NodefileStart = NodefileStartParam,#0.05,

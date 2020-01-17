@@ -127,6 +127,8 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
     # clean summary file
     
     # combine with inputs
+    # TODO: change this so that instead inputs are taken from the file that is saved alongside results
+    #       perhaps this should actually be included in creation of summary_stats file...
     params = allinputs[,c("input_name",runIDs[i])]
 
     # name cols of alloutputs if needed
