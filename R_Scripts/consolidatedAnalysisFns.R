@@ -19,20 +19,23 @@ library(data.table) # for faster merges
 ## Plot DR Production ####
 #TODO: add ability to plot multiple periods together
 #TODO: have demand, vdem be inputs
-if(!SHRLK){
-  modelOutputFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1PMin/"
-  modelInputFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/"
-}else{
-  modelOutputFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
-  modelInputFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/"
+if(SHRLK){
+  baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
+  outputFolBase = "/home/groups/weyant/plevi_outputs/"
+  inputFol = "inputs/"
+} else{
+  baseFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
+  outputFolBase = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/"
+  inputFol = "Data/julia_input/"
 }
+
 
 plotDRUse = function(runID,runDate,
                      inputfolID, outputfolID,
                      scenarios = 1:5, # what scenarios will be graphed
                      overlaplength = 6, endtrim=NULL, #loadTimeseriesData param
-                     model_output_fol = modelOutputFol, 
-                     model_input_fol = modelInputFol,
+                     model_output_fol = outputFolBase, 
+                     model_input_fol = inputFol,
                      SHRLOK = SHRLK,
                      base_fol = baseFol) { 
   # model_output_fol is where model output folder : 
@@ -237,8 +240,8 @@ drDispatchStats = function(runID,runDate,
                            scenarios = 1:5, # what scenarios will be graphed
                            overlaplength = 6, #loadTimeseriesData param
                            period = "p2_1020_1140", 
-                           model_output_fol = modelOutputFol, 
-                           model_input_fol = modelInputFol,
+                           model_output_fol = outputFolBase, 
+                           model_input_fol = inputFol,
                            SHRLOK = SHRLK,
                            base_fol = baseFol, endtrim=NULL){
   # desired outputs:

@@ -14,12 +14,11 @@ SHRLK = TRUE
 ## FILE STRUCTURE ##
 if(SHRLK){
   base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  output_fol_base  = "outputs/"
+  output_fol_base  = "/home/groups/weyant/plevi_outputs/"
   input_fol = "inputs/"
-  # scratch_output_fol = "/scratch/users/pjlevi/julia_outputs/INFORMS/"
 } else{
   base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
-  output_fol_base = "Data/julia_output/forIAEE_1Pmin/"
+  output_fol_base = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/"
   input_fol = "Data/julia_input/"
 }
 
@@ -182,8 +181,8 @@ if(plotDR){
     overlaplength = as.numeric(params$overlapLength)
     
     outputID = paste0(runIDs[r],"_",runDates[r])
-    output_fol = paste0(base_fol,output_fol_base,outputID,"/")
-    output_fol = paste0(base_fol,output_fol_base,outputID,"/")
+    output_fol = paste0(output_fol_base,outputID,"/")
+    output_fol = paste0(output_fol_base,outputID,"/")
     allcomt = loadTimeseriesData(output_fol,"u_commitment",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID)
     drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
     rm(allcomt)
@@ -201,7 +200,7 @@ if(genbreakdown_only){
   for(r in 1:length(runIDs)){
     print(runIDs[r])
     outputID = paste0(runIDs[r],"_",runDates[r])
-    output_fol = paste0(base_fol,output_fol_base,outputID,"/")
+    output_fol = paste0(output_fol_base,outputID,"/")
     # load gendat
     params = allinputs[,c("input_name",runID)]
     params = spread(params, key = input_name, value = runID)
@@ -215,7 +214,7 @@ if(genbreakdown_only){
       merge(gendat[,c("Capacity","PMin","plantUnique","VCost","Fuel")], by.x = "GEN_IND", by.y = "plantUnique") %>%
       filter(MWout > 0)
   
-    fuelBreakdown(prod2,paste0(base_fol,output_fol_base,"plots/"),runIDs[r])
+    fuelBreakdown(prod2,paste0(output_fol_base,"plots/"),runIDs[r])
   }
 }
 
@@ -225,7 +224,7 @@ if(rampdata_df){
   for(r in 1:length(runIDs)){
     print(runIDs[r])
     outputID = paste0(runIDs[r],"_",runDates[r])
-    output_fol = paste0(base_fol,output_fol_base,outputID,"/")
+    output_fol = paste0(output_fol_base,outputID,"/")
 
     params = allinputs[,c("input_name",runID)]
     params = spread(params, key = input_name, value = runID)
@@ -247,5 +246,5 @@ if(rampdata_df){
     }
   }
   xx=arrange(xx,REgen,speed,runName)
-  write_csv(xx,path = paste0(base_fol,output_fol_base,"Ramp_data3.csv"))
+  write_csv(xx,path = paste0(output_fol_base,"Ramp_data3.csv"))
 }

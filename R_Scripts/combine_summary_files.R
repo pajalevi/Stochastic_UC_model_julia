@@ -97,23 +97,24 @@ runDates = c(runDates16,runDates21,runDates14)#,runDates12)#c(runDates15,runDate
 combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scratch/users/pjlevi/julia_outputs/INFORMS/"){
   if(SHRLK){
     base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-    output_fol_base  = "outputs/"
+    output_fol_base  = "/home/groups/weyant/plevi_outputs/"
     input_fol = "inputs/"
     inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
   } else{
     base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
-    output_fol_base = "Data/julia_output/forIAEE_1Pmin/"
+    output_fol_base = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/"
     input_fol = "Data/julia_input/"
     inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
   }
+  
   allinputs = read_csv(inputs_file)
   
   for(i in 1:length(runIDs)){
     print(runIDs[i])
     # load summary file
     summaryFilePath = paste0(runIDs[i],"_",runDates[i],"/summary_stats",runIDs[i],".csv")
-    if(file.exists(paste0(base_fol,output_fol_base,summaryFilePath))){
-      summaryfile = read_csv(paste0(base_fol,output_fol_base,summaryFilePath))
+    if(file.exists(paste0(output_fol_base,summaryFilePath))){
+      summaryfile = read_csv(paste0(output_fol_base,summaryFilePath))
       HOME = TRUE
     } else if(file.exists(paste0(SCRATCH,summaryFilePath))){ #does summary file and output folder live in SCRATCH?
       summaryfile = read_csv(paste0(SCRATCH,summaryFilePath))
@@ -189,5 +190,5 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
   alloutputs = cbind(alloutputs, params)
   
   # save
-  write_csv(alloutputs,paste0(base_fol,output_fol_base,"combined_summary.csv")) # regardless of where output files are, this will be saved in HOME directories
+  write_csv(alloutputs,paste0(output_fol_base,"combined_summary.csv")) # regardless of where output files are, this will be saved in HOME directories
 }

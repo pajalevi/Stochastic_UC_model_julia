@@ -15,12 +15,11 @@ SHRLK = TRUE
 ## FILE STRUCTURE ##
 if(SHRLK){
   baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  outputFolBase  = "outputs/"
+  outputFolBase = "/home/groups/weyant/plevi_outputs/"
   inputFol = "inputs/"
-  scratch_output_fol = "/scratch/users/pjlevi/julia_outputs/INFORMS/"
 } else{
   baseFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
-  outputFolBase = "Data/julia_output/forIAEE_1Pmin/"
+  outputFolBase = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/"
   inputFol = "Data/julia_input/"
 }
   
@@ -47,7 +46,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   outputID = paste0(runID,"_",runDate)
   # instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/") # TODO: inputfolID should come from inputs_file -> params$timeseriesID
-  output_fol = paste0(base_fol,output_fol_base,outputID,"/")
+  output_fol = paste0(output_fol_base,outputID,"/")
   default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
   
   # get input parameters ####
