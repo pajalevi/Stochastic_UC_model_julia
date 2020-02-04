@@ -9,6 +9,7 @@
 library(tidyverse)
 library(viridis)
 library(data.table)
+source("./getModelParams.R")
 
 SHRLK = TRUE
 
@@ -54,13 +55,13 @@ combineRunResults <- function(runID, runDate, graphs = T,
   #       1: scrape names of all files that are inputfile*
   #       2: assume they're all the same, read in the first one
   #       3: massage the format of that one so that is looks like params does now. Voila!
-  inputfilename = list.files(path = output_fol,pattern = "inputfile*")[1]
-  inputs = read_csv(paste0(output_fol,inputfilename))
+  # inputfilename = list.files(path = output_fol,pattern = "inputfile*")[1]
+  # inputs = read_csv(paste0(output_fol,inputfilename))
   # trim off useless third column
-  print(paste("inputs has ",ncol(inputs),"columns, file name is ", inputfilename))
-  inputs = inputs[,1:2]
+  # print(paste("inputs has ",ncol(inputs),"columns, file name is ", inputfilename))
+  # inputs = inputs[,1:2]
   
-  params = spread(inputs, key = input_name, value = runID)
+  params = getModelParam(run_date = runDate,run_name = runID, output_fol_base) #spread(inputs, key = input_name, value = runID) # can just put getModelParams here!
   params$nrandp = as.numeric(params$nrandp)
   overlaplength = as.numeric(params$overlapLength)
   if(is.null(endtrim)){
@@ -127,7 +128,9 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   # add params
   print("writing params")
-  write.table(inputs, sep=",", row.names = FALSE, col.names = FALSE, quote = FALSE,
+  # need to make params vertical
+  write.table(gather(params, key = "input_name", value = "input_value"), 
+              sep=",", row.names = FALSE, col.names = FALSE, quote = FALSE,
             file = paste0(output_fol,"summary_stats",runID,".csv"),append=T)
   
   # match comt decision with capacity
@@ -328,7 +331,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   #---------------------------------
   ## consolidated data of generation source: fuelBreakdown() ####
-  genbreakdown = fuelBreakdown(prod2,paste0(base_fol,output_fol_base,"plots/"),runID)
+  genbreakdown = fuelBreakdown(prod2,paste0(output_fol_base,"plots/"),runID)
   genbreakdown = select(genbreakdown, Fuel, prodFrac)
   genbreakdown$Fuel = paste0("GENFRAC-",genbreakdown$Fuel)
   # paste0(base_fol,output_fol_base,"plots/")

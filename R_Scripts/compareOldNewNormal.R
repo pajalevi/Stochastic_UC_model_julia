@@ -3,8 +3,11 @@
 # try to do this in a way that actually makes sense
 library(tidyverse)
 library(plyr) #overwrites arrange, count, desc, failwith, id, mutate, rename, summarise, summarize
+library(scales)
+modpalette = brewer_pal(palette = "Dark2")(6)
+modpalette[1] = "blue"
 
-outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/"
+outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/"
 oldResults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_INFORMSruns_NovAnalysis.csv")
 newResults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_postINFORMS_newNormal_all.csv")
 revertResults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_preINFORMS_revert_attempt_11-7.csv")
@@ -20,9 +23,9 @@ new70results$edition = "new70"
 
 results = rbind.fill(newResults,revertResults,new70results)
 results$dr_varcost = as.factor(results$dr_varcost)
-results$cost_lowbound = results$`expected Total costs` - (results$`expected Total costs` * results$MIPGap)
-results$`expected cost reduction lowbound` = results$`Expected cost reduction from DR` - (results$`expected Total costs` * results$MIPGap)
-results$`expected cost reduction hibound` = results$`Expected cost reduction from DR` + (results$`expected Total costs` * results$MIPGap)
+results$cost_lowbound = results$`expected Total costs` - (results$`expected Total costs` * results$MIPGapParam)
+results$`expected cost reduction lowbound` = results$`Expected cost reduction from DR` - (results$`expected Total costs` * results$MIPGapParam)
+results$`expected cost reduction hibound` = results$`Expected cost reduction from DR` + (results$`expected Total costs` * results$MIPGapParam)
 noDR_sel = (results$type == "noDR")
 results$`expected cost reduction hibound`[noDR_sel] = results$`Expected cost reduction from DR`[noDR_sel]
 

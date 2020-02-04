@@ -5,6 +5,7 @@ library(tidyverse)
 library(data.table)
 source("./getModelParams.R")
 # library(stringr)
+library(plyr) #for rbind.fill
 
 SHRLK = TRUE
 
@@ -89,8 +90,15 @@ runDates20 = rep("2019-11-07",5)
 runIDs21 = c("advNot2_keyDays2","advNot3_keyDays2")
 runDates21 = rep("2019-11-15",2)
 
-runIDs = c(runIDs16,runIDs21,runIDs14)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates16,runDates21,runDates14)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = "*_o25_*keyDays2")
+yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = "*_o25_c2_keyDays2")
+xx = c(xx,yy)
+runIDs22 = substr(xx, 1, nchar(xx)-11)
+runDates22 = substr(xx, nchar(xx)-9,100)
+
+runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+
 
 
 # iterate through all summary files and combine them ####
@@ -107,8 +115,11 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
     inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
   }
   
-  allinputs = read_csv(inputs_file)
+  # allinputs = read_csv(inputs_file)
   
+  # load summary_stats created by visualize_DR_use/combineRunResults for each run
+  # combine this with inputs from the model-generated copy of inputs
+  # put all runs in the same dataframe
   for(i in 1:length(runIDs)){
     print(runIDs[i])
     # load summary file
@@ -126,27 +137,31 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
     }
     
     # clean summary file
+    # params = spread(inputs, key = input_name, value = names(inputs)[2])
+    summary2 = spread(summaryfile,key = output_type, value = output_value) # should make a 1-row dataframe
     
     # combine with inputs
-    # TODO: change this so that instead inputs are taken from the file that is saved alongside results
-    #       perhaps this should actually be included in creation of summary_stats file...
-    params = allinputs[,c("input_name",runIDs[i])]
+    # params = getModelParam(run_date = runDates[i],run_name = runIDs[i], output_fol_base)  # should return params in format: ?
+    # this returns a dataframe that has one row.
 
-    # name cols of alloutputs if needed
+    # combine params, summary file, append to existing outputs
     if(i==1){
       # create outputs matrix
-      alloutputs = as_tibble(matrix(nrow = 1, ncol = 1+ nrow(params) + nrow(summaryfile)))
-      names(alloutputs) = c("runID",params$input_name,summaryfile$output_type)
-      alloutputs[i,] = c(runIDs[i],params[[2]],summaryfile[[2]]) 
+      # alloutputs = cbind(runIDs[i],params,summary2)
+      # names(alloutputs) = c("runID",names(params),names(summary2))
+      alloutputs = cbind(runIDs[i],summary2)
+      names(alloutputs) = c("runID",names(summary2))
     } else {
       # bind a new row
-      newoutputs = as_tibble(matrix(nrow = 1, ncol = 1+ nrow(params) + nrow(summaryfile)))
-      names(newoutputs) = c("runID",params$input_name,summaryfile$output_type)
-      newoutputs[1,] = c(runIDs[i],params[[2]],summaryfile[[2]]) 
-      alloutputs = bind_rows(alloutputs,newoutputs)
+      # newoutputs = cbind(runIDs[i],params,summary2) 
+      # names(newoutputs) = c("runID",names(params),names(summary2))
+      newoutputs = cbind(runIDs[i],summary2) 
+      names(newoutputs) = c("runID",names(summary2))
+      alloutputs = rbind.fill(alloutputs,newoutputs)#bind_rows(alloutputs,newoutputs)
+       
     }
     
-  }
+  } #end iteration over runs
   
   ## calculate new outputs if noDR run present##
     # make TYPE column for easier plotting. grep the first number or _ in runID
@@ -183,12 +198,6 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
       alloutputs$`Expected CO2 reduction from DR` = alloutputs$`Total CO2 emissions`[noDR_row] - alloutputs$`Total CO2 emissions`
     }
     
-
-  ## add in model params ##
-  # MAKE A FN TO DO THIS. fn inputs: date, model run. fn outputs: tibble of model params
-  params = getModelParams(run_dates = runDates,run_names = runIDs, randTF = as.logical(alloutputs$DRrand))
-  alloutputs = cbind(alloutputs, params)
-  
   # save
   write_csv(alloutputs,paste0(output_fol_base,"combined_summary.csv")) # regardless of where output files are, this will be saved in HOME directories
 }
