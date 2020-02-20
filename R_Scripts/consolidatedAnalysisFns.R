@@ -32,9 +32,9 @@ if(SHRLK){
 # from Nov 20, 2019 commit -  ie before  I tried to edit plotDRUse to plot all periods at once
 plotDRUse = function(runID,runDate,drcommit,
                      inputfolID, outputfolID,
-                     scenarios = 1:5, # what scenarios will be graphed
-                     overlaplength = 6, #loadTimeseriesData param
-                     period = "p2_1020_1140", 
+                     scenarios = 1:10, # what scenarios will be graphed
+                     overlaplength = 6, endtrim = NULL,#loadTimeseriesData param
+                     period = "p10_5238_5340", nscen = "o25",
                      model_output_fol = outputFolBase, 
                      model_input_fol = inputFol,
                      SHRLOK = SHRLK,
@@ -48,8 +48,9 @@ plotDRUse = function(runID,runDate,drcommit,
   
   plot_fol = paste0(model_output_fol,"plots/")
   if(!dir.exists(plot_fol)){dir.create(plot_fol)}
-  instance_in_fol = paste0(model_input_fol,inputfolID,"/")
-  if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist", instance_in_fol)}
+  
+  instance_in_fol = paste0(baseFol,inputFol,inputfolID,"/")
+  if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist ", instance_in_fol)}
   output_fol = paste0(model_output_fol,outputfolID,"/")
   
   # load params
@@ -61,10 +62,16 @@ plotDRUse = function(runID,runDate,drcommit,
   allinputs = read_csv(inputs_file)
   params = allinputs[,c("input_name",runID)]
   params = spread(params, key = input_name, value = runID)
+  
+  if(is.null(endtrim)){
+    endtrim = overlaplength/2
+    print(paste("endtrim set to", endtrim))
+  }
+  
   ##
   
   # load DR production
-  drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID)
+  drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID, endtrim)
   
   # ggplot(drprod, aes(x=t,y=value)) + facet_wrap(~scenario) + geom_point()
   # ggplot(filter(drprod,nperiod=="10"), aes(x=t,y=value)) + facet_wrap(~scenario) + 
@@ -77,8 +84,8 @@ plotDRUse = function(runID,runDate,drcommit,
   numperiod=as.numeric(periodinfo[2])
   firstperiod = as.numeric(periodinfo[3])
   lastperiod = as.numeric(periodinfo[4])
-  dem_base = read_csv(paste0(model_input_fol,"ercot_default/ercot_demand_2016.csv"))
-  demchange = read_csv(paste0(instance_in_fol,"demandScenarios_vdem_ARMA26.0_",period,".csv")) 
+  dem_base = read_csv(paste0(base_fol,model_input_fol,"ercot_default/ercot_demand_2016.csv"))
+  demchange = read_csv(paste0(instance_in_fol,"demandScenarios_vdem_ARMA26.0_",nscen,"_",period,".csv")) 
   demrealo1 = dem_base$demand[firstperiod:lastperiod] * demchange$V1
   demreal = dem_base$demand[firstperiod:lastperiod] * demchange
   demreal$t = firstperiod:lastperiod
@@ -96,8 +103,8 @@ plotDRUse = function(runID,runDate,drcommit,
     geom_line(aes(x=t-min(t), y=(value*10)+30000), color="blue")+
     geom_line(aes(x=t-min(t),y=demand)) +
     # scale_color_gradient(low="black",high="red")+
-    ggtitle(paste(runIDs[r], "Period 10 demand and DR Production")) +
-    ggsave(paste0(plot_fol,runIDs[r],"_period10demand_DRproduction.png"),width = 10, height=7)
+    ggtitle(paste(runIDs[r], "Period ",numperiod," demand and DR Production")) +
+    ggsave(paste0(plot_fol,runIDs[r],"_",period,"_demand_DRproduction.png"),width = 10, height=7)
   
   # plot dr commitment
   drcomtoneperiod = filter(drcommit, nperiod == numperiod)
@@ -112,7 +119,7 @@ plotDRUse = function(runID,runDate,drcommit,
     geom_line(aes(x=t-min(t),y=demand)) +
     # scale_color_gradient(low="black",high="red")+
     ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR Commitment"))) +
-    ggsave(paste0(plot_fol,runIDs[r],"_period",numperiod,"demand_DRcommitment.png"),width = 10, height=7)
+    ggsave(paste0(plot_fol,runIDs[r],"_",period,"_demand_DRcommitment.png"),width = 10, height=7)
   
   # plot both together
   demprod = rename(demprod, production = value)
@@ -126,7 +133,7 @@ plotDRUse = function(runID,runDate,drcommit,
     geom_line(aes(x=t-min(t),y=demand)) +
     scale_color_gradient(low="black",high="red")+
     ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR production with commitment in red"))) +
-    ggsave(paste0(plot_fol,runIDs[r],"_period",numperiod,"demand_DRfunction.png"),width = 10, height=7)
+    ggsave(paste0(plot_fol,runIDs[r],"_",period,"_demand_DRfunction.png"),width = 10, height=7)
   
 }
 

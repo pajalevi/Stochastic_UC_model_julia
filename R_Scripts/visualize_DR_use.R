@@ -208,14 +208,15 @@ if(plotDR){
     outputID = paste0(runIDs[r],"_",runDates[r])
     output_fol = paste0(output_fol_base,outputID,"/")
     output_fol = paste0(output_fol_base,outputID,"/")
-    # allcomt = loadTimeseriesData(output_fol,"u_commitment",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID,endtrim=6)
-    # drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
-    # rm(allcomt)
+    allcomt = loadTimeseriesData(output_fol,"u_commitment",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID,endtrim=6)
+    drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
+    rm(allcomt)
     # iterate over function
     # plot dr commitment and demand
   
-    plotDRUse(runIDs[r],runDates[r], #drcommit = drcomt, 
-              inputfolID,outputID,endtrim=6)
+    plotDRUse(runIDs[r],runDates[r], drcommit = drcomt, 
+              inputfolID=inputfolID,outputfolID = outputID,
+              period = "p2_1020_1140")
   
   } #end for loop
 }
