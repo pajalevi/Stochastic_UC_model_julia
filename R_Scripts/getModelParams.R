@@ -68,9 +68,14 @@ getModelParam = function(run_date,run_name,alloutput_fol){
     inputs = inputs[,1:2]
     params = spread(inputs, key = input_name, value = names(inputs)[2]) # THIS IS A PROBLEM WHEN TWO RUNS ARE COMBINED (e.g. for different MIPgap params). soln: always the second column name
     # make a container for input files
-    if(i==1){allinputs = as.data.frame(matrix(nrow = length(inputfilenames),ncol = ncol(params),
-                                              dimnames=list(c(),names(params[,1:(ncol(params))]))))} 
-    allinputs[i,] = params[,1:(ncol(params))]
+    if(i==1){
+      allinputs = as.data.frame(matrix(nrow = 1,ncol = ncol(params),
+                                              dimnames=list(c(),names(params[,1:(ncol(params))]))))
+      allinputs[i,] = params
+    } else {
+      allinputs = rbind.fill(allinputs,params)
+    }
+    
   }
   
   # inspect allinputs  for anomalies
@@ -81,7 +86,7 @@ getModelParam = function(run_date,run_name,alloutput_fol){
     nunique = length(unique(allinputs[,inputname]))
     # print(nunique)
     if(nunique > 1){
-      warning("There is more than 1 given ",inputname," for run ",runID)
+      stop("There is more than 1 given ",inputname," for run ",runID)
     }
   }
   # save a single row and return

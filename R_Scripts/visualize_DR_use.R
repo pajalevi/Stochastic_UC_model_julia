@@ -5,9 +5,11 @@
 # March 2019
 
 # load model data
+library(plyr)
 library(tidyverse)
 library(viridis)
 library(data.table)
+options(warn=1) # print warnings as they occur
 
 SHRLK = TRUE
 
@@ -132,13 +134,26 @@ xx = list.files(path = output_fol_base, pattern = "*_o25_*keyDays2")
 runIDs22 = substr(xx, 1, nchar(xx)-11)
 runDates22 = substr(xx, nchar(xx)-9,100)
 
-# yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = "*_o25_c2_keyDays2")
-# runIDs22 = substr(yy, 1, nchar(yy)-11)
-# runDates22 = substr(yy, nchar(yy)-9,100)
+yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = "*_o25_c2_keyDays2")
+runIDs23 = substr(yy, 1, nchar(yy)-11)
+runDates23 = substr(yy, nchar(yy)-9,100)
 
 
-runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs24 = "advNot1_o25_c2_keyDays2"
+runDates24 = "2019-99-99" # THIS IS A TEST WITH A SMALL PROD
+
+yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("advNot*_o25_c2_keyDays2*"))
+runIDs25 = substr(yy, 1, nchar(yy)-11)
+runDates25 = substr(yy, nchar(yy)-9,100)
+
+yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("rand_o25_u*"))
+last_loc = as.vector(regexpr("\\_[^\\_]*$", yy))
+runIDs26 = substr(yy, 1, last_loc - 1)
+runDates26 = substr(yy, last_loc+1,100)
+
+
+runIDs = c(runIDs26)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates26)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
@@ -147,7 +162,7 @@ summary_combine = T # needed to create prod.csv
 plotDR = F
 genbreakdown_only = F # this is done in summary_combine
 rampdata_df = F
-loadOverrideOption = F# should prod be re-calculated?
+loadOverrideOption = T# should prod be re-calculated?
 ##----##----##----##
 
 instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
@@ -175,7 +190,8 @@ if(summary_combine){
       # combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption,
                         # input_fol = scratch_)
     # } else {error("file not found")}
-      
+    
+    warnings()
     print("Done, resting")
     Sys.sleep(15) #let the computer cool down
   }
@@ -185,20 +201,21 @@ if(summary_combine){
 if(plotDR){
   print("starting plotDRUse")
   for(r in 1:length(runIDs)){
-    params = allinputs[,c("input_name",runID)]
-    params = spread(params, key = input_name, value = runID)
+    params = allinputs[,c("input_name",runIDs[r])]
+    params = spread(params, key = input_name, value = runIDs[r])
     overlaplength = as.numeric(params$overlapLength)
     
     outputID = paste0(runIDs[r],"_",runDates[r])
     output_fol = paste0(output_fol_base,outputID,"/")
     output_fol = paste0(output_fol_base,outputID,"/")
-    allcomt = loadTimeseriesData(output_fol,"u_commitment",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID)
-    drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
-    rm(allcomt)
+    # allcomt = loadTimeseriesData(output_fol,"u_commitment",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID,endtrim=6)
+    # drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
+    # rm(allcomt)
     # iterate over function
     # plot dr commitment and demand
   
-    plotDRUse(runIDs[r],runDates[r], drcommit = drcomt, inputfolID,outputID)
+    plotDRUse(runIDs[r],runDates[r], #drcommit = drcomt, 
+              inputfolID,outputID,endtrim=6)
   
   } #end for loop
 }

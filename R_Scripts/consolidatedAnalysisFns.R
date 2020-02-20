@@ -29,11 +29,12 @@ if(SHRLK){
   inputFol = "Data/julia_input/"
 }
 
-
-plotDRUse = function(runID,runDate,
+# from Nov 20, 2019 commit -  ie before  I tried to edit plotDRUse to plot all periods at once
+plotDRUse = function(runID,runDate,drcommit,
                      inputfolID, outputfolID,
                      scenarios = 1:5, # what scenarios will be graphed
-                     overlaplength = 6, endtrim=NULL, #loadTimeseriesData param
+                     overlaplength = 6, #loadTimeseriesData param
+                     period = "p2_1020_1140", 
                      model_output_fol = outputFolBase, 
                      model_input_fol = inputFol,
                      SHRLOK = SHRLK,
@@ -60,18 +61,120 @@ plotDRUse = function(runID,runDate,
   allinputs = read_csv(inputs_file)
   params = allinputs[,c("input_name",runID)]
   params = spread(params, key = input_name, value = runID)
-  
-  if("overlaplength" %in% names(params)) {overlaplength = params$overlaplength}
-  
-  if(is.null(endtrim)){
-    endtrim = overlaplength/2
-    print(paste("endtrim set to", endtrim))
-  }
-  
   ##
   
   # load DR production
   drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID)
+  
+  # ggplot(drprod, aes(x=t,y=value)) + facet_wrap(~scenario) + geom_point()
+  # ggplot(filter(drprod,nperiod=="10"), aes(x=t,y=value)) + facet_wrap(~scenario) + 
+  #   geom_line() +
+  #   ggtitle(paste(runID, "Period 10 DR production"))#+ 
+  # coord_cartesian(xlim=c(5000,6000))
+  
+  # load and set up demand #
+  periodinfo = strsplit(period,"p|_")[[1]] 
+  numperiod=as.numeric(periodinfo[2])
+  firstperiod = as.numeric(periodinfo[3])
+  lastperiod = as.numeric(periodinfo[4])
+  dem_base = read_csv(paste0(model_input_fol,"ercot_default/ercot_demand_2016.csv"))
+  demchange = read_csv(paste0(instance_in_fol,"demandScenarios_vdem_ARMA26.0_",period,".csv")) 
+  demrealo1 = dem_base$demand[firstperiod:lastperiod] * demchange$V1
+  demreal = dem_base$demand[firstperiod:lastperiod] * demchange
+  demreal$t = firstperiod:lastperiod
+  demreal = gather(demreal,key = "scenario",value = "demand",-t) 
+  demreal$scenarionum = substr(demreal$scenario,2,4)
+  
+  # select demand from just one period #
+  drprodoneperiod = filter(drprod,nperiod == numperiod)
+  drprodoneperiod$scenarionum = substr(drprodoneperiod$scenario,2,4)
+  demprod = merge(demreal,drprodoneperiod,by=c("t","scenarionum")) 
+  
+  # plot demand and DR production
+  ggplot(filter(demprod,scenarionum %in% scenarios))+ 
+    facet_wrap(~scenario.x) + 
+    geom_line(aes(x=t-min(t), y=(value*10)+30000), color="blue")+
+    geom_line(aes(x=t-min(t),y=demand)) +
+    # scale_color_gradient(low="black",high="red")+
+    ggtitle(paste(runIDs[r], "Period 10 demand and DR Production")) +
+    ggsave(paste0(plot_fol,runIDs[r],"_period10demand_DRproduction.png"),width = 10, height=7)
+  
+  # plot dr commitment
+  drcomtoneperiod = filter(drcommit, nperiod == numperiod)
+  drcomtoneperiod$scenarionum = substr(drcomtoneperiod$scenario,2,4)
+  demcomt = merge(demreal, drcomtoneperiod, by=c("t","scenarionum"))
+  # print(names(demcomt))
+  # print(head(demcomt))
+  
+  ggplot(filter(demcomt,scenarionum %in% scenarios))+ 
+    facet_wrap(~scenario.x) + 
+    geom_line(aes(x=t-min(t), y=(value*10000)+30000), color="blue")+
+    geom_line(aes(x=t-min(t),y=demand)) +
+    # scale_color_gradient(low="black",high="red")+
+    ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR Commitment"))) +
+    ggsave(paste0(plot_fol,runIDs[r],"_period",numperiod,"demand_DRcommitment.png"),width = 10, height=7)
+  
+  # plot both together
+  demprod = rename(demprod, production = value)
+  drcomtoneperiod = rename(drcomtoneperiod, commitment = value)
+  dralldata = merge(drcomtoneperiod, demprod, by=c("t","scenarionum"))
+  # print(names(dralldata))
+  ggplot(filter(dralldata,scenarionum %in% scenarios))+ 
+    facet_wrap(~scenario.x) + 
+    geom_line(aes(x=t-min(t), y=(production*10)+30000), color="blue")+
+    geom_point(aes(x=t-min(t), y=(production*10)+30000, color = commitment), shape=1, size = 0.5) + 
+    geom_line(aes(x=t-min(t),y=demand)) +
+    scale_color_gradient(low="black",high="red")+
+    ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR production with commitment in red"))) +
+    ggsave(paste0(plot_fol,runIDs[r],"_period",numperiod,"demand_DRfunction.png"),width = 10, height=7)
+  
+}
+
+
+plotDRUse_all_underconstruction = function(runID,runDate,
+                     inputfolID, outputfolID,
+                     scenarios = 1:5, # what scenarios will be graphed
+                     overlaplength = 6, endtrim=NULL, #loadTimeseriesData param
+                     model_output_fol = outputFolBase, 
+                     model_input_fol = inputFol,
+                     SHRLOK = SHRLK,
+                     base_fol = baseFol) { 
+  # model_output_fol is where model output folder : 
+  # instance_in_fol is where model input is
+  # plot_fol is where plots should go
+  # output_fol: paste0(base_fol,output_fol_base,outputID,"/")
+  # plot_fol:   paste0(base_fol,output_fol_base,"plots/")
+  # instance_in:paste0(base_fol,input_fol,inputfolID,"/")
+  
+  plot_fol = paste0(model_output_fol,"plots/")
+  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+  
+  instance_in_fol = paste0(baseFol,inputFol,inputfolID,"/")
+  if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist ", instance_in_fol)}
+  output_fol = paste0(model_output_fol,outputfolID,"/")
+  
+  # load params
+  if(!SHRLK){
+    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+  }else{
+    inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
+  }
+  allinputs = read_csv(inputs_file)
+  params = allinputs[,c("input_name",runID)]
+  params = spread(params, key = input_name, value = runID)
+  
+  if("overlaplength" %in% names(params)) {overlaplength = params$overlaplength}
+  
+  # if(is.null(endtrim)){
+    endtrim = overlaplength/2
+    print(paste("endtrim set to", endtrim))
+  # }
+  
+  ##
+  
+  # load DR production
+  drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,
+                              dist_ID = params$stochID, endtrim)
   
   # load and set up demand #
   periodinfo = strsplit(period,"p|_")[[1]] 

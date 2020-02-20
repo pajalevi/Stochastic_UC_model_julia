@@ -90,19 +90,25 @@ runDates20 = rep("2019-11-07",5)
 runIDs21 = c("advNot2_keyDays2","advNot3_keyDays2")
 runDates21 = rep("2019-11-15",2)
 
-xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = "*_o25_*keyDays2")
-yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = "*_o25_c2_keyDays2")
-xx = c(xx,yy)
-runIDs22 = substr(xx, 1, nchar(xx)-11)
-runDates22 = substr(xx, nchar(xx)-9,100)
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("*_o25*keyDays2*"))
+last_loc = as.vector(regexpr("\\_[^\\_]*$", xx))
+runIDs22 = substr(xx, 1, last_loc - 1)
+runDates22 = substr(xx, last_loc+1,100)
 
-runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+# runIDs24 = "advNot1_o25_c2_keyDays2"
+# runDates24 = "2019-99-99" # THIS IS A TEST WITH A SMALL PROD
+yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("rand_o25_u*"))
+last_loc = as.vector(regexpr("\\_[^\\_]*$", yy))
+runIDs26 = substr(yy, 1, last_loc - 1)
+runDates26 = substr(yy, last_loc+1,100)
 
+runIDs = c(runIDs22, runIDs26)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates22, runDates26)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 
 
 # iterate through all summary files and combine them ####
 combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scratch/users/pjlevi/julia_outputs/INFORMS/"){
+  library(plyr) #for rbind.fill
   if(SHRLK){
     base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
     output_fol_base  = "/home/groups/weyant/plevi_outputs/"
@@ -178,6 +184,11 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
                                             as.numeric(alloutputs$`expected fast all costs`), 
                                             as.numeric(alloutputs$`expected DR all costs`)), na.rm = T)
     
+    ## repair any that have o25 but nrandp is 5
+    # fixsel = which(alloutputs$nrandp == 5 & str_detect(alloutputs$runID,pattern="_o25_"))
+    # alloutputs$`expected Total costs`[fixsel] = alloutputs$`expected Total costs`[fixsel]/5
+    
+    
     # identify noDR row
     noDR_row = which(str_detect(alloutputs$runID,"noDR")) # if there are multiple noDR rows, use first one
     if(length(noDR_row) > 0){ 
@@ -195,6 +206,7 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
       # CO2 reduction rel to noDR
       alloutputs$`Total CO2 emissions` = as.numeric(alloutputs$`expected slow CO2 emissions`) + 
         as.numeric(alloutputs$`expected fast CO2 emissions`) + as.numeric(alloutputs$`expected DR CO2 emissions`)
+      # alloutputs$`Total CO2 emissions`[fixsel] = alloutputs$`Total CO2 emissions`[fixsel]/5
       alloutputs$`Expected CO2 reduction from DR` = alloutputs$`Total CO2 emissions`[noDR_row] - alloutputs$`Total CO2 emissions`
     }
     

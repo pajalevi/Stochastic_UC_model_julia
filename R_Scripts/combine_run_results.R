@@ -6,10 +6,13 @@
 # Patricia levi
 
 # load model data
+library(plyr)
 library(tidyverse)
 library(viridis)
 library(data.table)
+
 source("./getModelParams.R")
+options(warn=1) # print warnings as they occur
 
 SHRLK = TRUE
 
@@ -67,7 +70,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   if(is.null(endtrim)){
     endtrim = overlaplength/2
     print(paste("endtrim set to", endtrim))
-    }
+  }
   
   print(paste("overlap length is",overlaplength,"and number of scenarios is",params$nrandp))
   
@@ -372,6 +375,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   } else {
     print("Loading v_startup_all.csv")
     allstartup = read_csv(file = paste0(output_fol,"fast_startup_all.csv"))
+    allstartup$prob=1/params$nrandp
   }
   
   # allstartup = allstartup %>%
