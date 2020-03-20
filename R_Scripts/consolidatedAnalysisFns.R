@@ -1,6 +1,6 @@
 # collection of functions that assist with analyzing 
 # data from model runs after theyve been consolidated
-# March 2019
+# March 2019 - March 2020
 
 
 ## FILE STRUCTURE ##
@@ -12,22 +12,328 @@
 library(tidyverse)
 library(viridis) # for nicer plot colors
 library(data.table) # for faster merges
+library(lubridate)
 # source(paste0(base_fol,"/Julia_UC_Github/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
 ## 
 
-
-## Plot DR Production ####
-#TODO: add ability to plot multiple periods together
-#TODO: have demand, vdem be inputs
+SHRLK = TRUE
 if(SHRLK){
   baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  outputFolBase = "/home/groups/weyant/plevi_outputs/"
+  outputFolBase = "/home/groups/weyant/plevi_outputs/slow_hydro/"
+  # outputFolBase = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
   inputFol = "inputs/"
+  scriptsFol = "code/"
+  source(paste0(baseFol,"code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData()
 } else{
   baseFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
   outputFolBase = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/forIAEE_1Pmin/"
   inputFol = "Data/julia_input/"
+  scriptsFol = "Julia_UC_Github/Julia_scripts/"
 }
+# New naming convention: baseFol for scripts, base_fol within functions
+
+
+# costByTimestep(runID, runDate, instance_in_fol, default_in_fol)
+costByTimestep = function(runID, runDate,  
+                          # inputfolID, #e.g. 5d_6o-keyDays2
+                          # outputfolID, # e.g. paste0(runIDs[r],"_",runDates[r])
+                          instanceFol,# e.g. "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/5d_6o_keyDays2/" (instance_in_fol)
+                          default_in_fol,  # e.g. "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/ercot_default/"
+                          scripts_fol = scriptsFol, # e.g. "code/"
+                          outputBase = outputFolBase # e.g. "/home/groups/weyant/plevi_outputs/"
+                          ){
+  # set up file paths
+  outputfolID  = paste0(runID,"_",runDate)
+  output_fol = paste0(outputBase,outputfolID,"/")
+  if(!SHRLK){
+    inputs_file = paste0(base_fol,scripts_fol,"inputs_ercot.csv")
+  }else{
+    inputs_file = paste0(base_fol,scripts_fol,"inputs_ercot.csv")
+  }
+    
+  # get params
+  allinputs = read_csv(inputs_file)
+  params = allinputs[,c("input_name",runID)]
+  params = spread(params, key = input_name, value = runID)
+
+  # load prod
+  prod = read_csv(file = paste0(output_fol,"prod.csv"))
+  
+  # load commit data
+  allstart = loadTimeseriesData(output_fol,"v_startup",as.numeric(params$overlapLength),2, probabilities=F,instanceFol,
+                               params$nrandp,dist_ID = params$stochID,endtrim=as.numeric(params$overlapLength)/2)
+  # handle allstart data
+  allstart$value = round(allstart$value) #numerical errors
+  allstart$value[allstart$value < 0] = 0 # we only care about the cost of starting up
+  
+  # load generator data
+  gendat = read_csv(file = paste0(default_in_fol,params$genFile))
+  gendat = dplyr::rename(gendat, GEN_IND = plantUnique)
+
+   # load list of slow gens, add slow/fast spec to gendat
+  slowgens = read_csv(file = paste0(output_fol,"slow_gens.csv"))
+  slowgens = slowgens$x
+  speedslow = tibble(GEN_IND = slowgens, speed = "slow")
+  gendat = merge(gendat, speedslow, by = "GEN_IND", all.x=T)
+  gendat$speed[is.na(gendat$speed)]="fast"
+       ## Somehow including this messes up the merge later...!
+        ## so fast generators are NA for speed in commitment
+  
+  # for SDEV
+  # prod = prod[prod$t<2000,] 
+  # allstart = allstart[allstart$t<2000,]
+  
+  # # merge gendat with prod
+  prod2 = merge(as.data.table(prod), as.data.table(gendat[,c("GEN_IND","VCost","StartCost","Fuel")]), by = "GEN_IND", all.x=T)
+  # prod2 = merge(prod, gendat, by = "GEN_IND", all.x=T)
+  # rm(prod)
+  
+  # merge gen with commit
+  start2 = merge(as.data.table(allstart), as.data.table(gendat[,c("GEN_IND","VCost","StartCost","Fuel","speed")]), by = "GEN_IND", all.x=T) 
+  start2 = rename(start2, startup = value)
+  # rm(allstart)
+  
+  # calculate $/prod, $/commit
+  prod2$prodcost = as.numeric(prod2$MWout) * as.numeric(prod2$VCost)
+  start2$startcost = as.numeric(start2$startup) * as.numeric(start2$StartCost)
+  
+  # summarise cost by t, scenario
+  prod3 = prod2 %>%
+    group_by(t, scenario, nperiod)  %>%  ##speed
+    summarise(totprodcost = sum(prodcost,na.rm=T))
+  start3 = start2 %>%
+    group_by(t, scenario, nperiod)  %>% ##speed
+    summarise(totstartcost = sum(startcost,na.rm=T))
+  
+  # merge prod, commit, add up
+  allcost = merge(as.data.frame(prod3),as.data.frame(start3), by = c("t","scenario","nperiod"), all.x=T, all.y=T) ##speed
+  #Maybe need to add more in 'by' to prevent lots of .x, .y? test with short sets 
+  # some NAs introduced by merge
+  
+  # calculate summary stats for $/t across scenarios
+  # replace NAs with 0
+  allcost$totprodcost[is.na(allcost$totprodcost)] = 0
+  allcost$totstartcost[is.na(allcost$totstartcost)] = 0
+  
+  # compute sum across scenarios
+  allcost$totcost  = allcost$totprodcost + allcost$totstartcost
+  allcost2 = allcost %>%
+    group_by(t) %>% # can also group by nperiod to retain this variable without changing anything
+    summarize(meanprodcost = mean(totprodcost),
+                     meanstartcost = mean(totstartcost),
+              meancost = mean(totcost),
+              maxcost = max(totcost),
+              mincost =  min(totcost),
+              sdcost = sd(totcost)) 
+
+  # for plotting
+  allcost2$rankt = rank(allcost2$t)
+  
+  # make plot?
+  plot_fol = paste0(output_fol,"plots/")
+  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+  
+  # Identify breaks between runs
+  jumps = which(diff(allcost2$t)>1)
+
+  ggplot(allcost2, aes(x = rankt, y = meancost)) +
+    geom_line()+
+    geom_line(aes(x=rankt,  y = mincost, color = "light blue")) + 
+    geom_line(aes(x=rankt,  y = maxcost, color = "light green")) +             
+    theme_minimal() +
+    geom_vline(xintercept = jumps+0.5, color = "red", linetype="dotted")+
+    scale_color_discrete(name = "", labels = c("Min","Max"))
+    ggsave(paste0(plot_fol,runID,"_totcost.png"), width = 20, height = 5)
+  
+  # save dataframe
+  write_csv(path =  paste0(plot_fol,runID,"_totcost.csv"), allcost2)
+  
+  # save csv of cost by scenario
+  write_csv(path =  paste0(plot_fol,runID,"_allcost.csv"), allcost)
+  
+  # jumps = which(diff(allcost$t)>1)
+  allcost$rankt = rank(allcost$t)
+  
+  ggplot(allcost, aes(x = rankt, y = totcost, color = scenario)) +
+    facet_wrap(~nperiod, scales="free_x")+
+    geom_line() + theme_minimal() +
+    # geom_vline(xintercept = jumps+0.5, color = "red", linetype="dotted")+
+    ggsave(paste0(plot_fol, runID,"_allcost.png"),width = 20, height = 20)
+    
+}
+
+
+
+eventStats = function(runID, runDate, output_fol_base = outputFolBase){
+  # depends on getDRAllData
+  # based on that output, computes:
+  # - number of unique events in each scenario
+  # - length of each event
+  # - start time of each event (probably requires lubridate)
+  # and plots
+  # - histogram of event length
+  # - histogram of event start time
+  # - histogram of number of events across all scenarios  (eg total count  is 25)
+  
+## param setup
+  outputfolID = paste0(runID,"_",runDate)
+  output_fol = paste0(output_fol_base,outputfolID,"/")
+  plot_fol = paste0(output_fol_base,"plots/")
+  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+  
+  # load DR all data
+  drdat = getDRAllData(runID,runDate)
+  
+## Find events and assign ID, based off of code below:
+      # prodtimes =  arrange(filter(drdat,value.commit>0, scenario == "o1"), t)
+      # jumps = which(diff(prodtimes$t)>1)
+      # prodtimes$diff  = c(0,diff(prodtimes$t)) #assume t sorted
+      # prodtimes$end = -1 #if  any -1 remain,  error. also logic is broken.
+      # prodtimes$end[prodtimes$diff == 1] = 0
+      # prodtimes$end[prodtimes$diff != 1] = 1
+      # # prodtimes$end3  = !(c(0,diff(prodtimes$t)) == 1) #this is just the oneliner of  the previous three lines to see if  I could... but it is harder to read
+      # prodtimes$eventnum  = cumsum(prodtimes$end)
+  drdat$scenarionum = as.numeric(drdat$scenarionum)
+  drdat2 = drdat %>%
+    filter(value.commit >0) %>%
+    arrange(scenarionum,t)
+  # scenarios are in order
+  # t is strictly increasing except when we swich to next scenario
+  drdat2$tdiffs = c(0,diff(drdat2$t))
+  # breaks2 = which(drdat2$tdiffs > 1 | drdat2$tdiffs < 0) #indicates first row of event
+  
+  drdat2$eventStart = -1
+  drdat2$eventStart[drdat2$tdiffs == 1] = 0
+  drdat2$eventStart[drdat2$tdiffs != 1] = 1
+  drdat2$eventnum = cumsum(drdat2$eventStart)
+  
+## count number of events in each scenario  &  plot ##
+  eventdat = drdat2 %>%
+    group_by(scenario,scenarionum) %>%
+    summarise(nevents = length(unique(eventnum)))
+  # TODO: test this with a dataset that isn't advNot3 so that there should be differing #s of events in each scenario
+  # if(length(unique(eventdat$nevents)) > 1){
+    # binw = round((max(eventdat$nevents) - min(eventdat$nevents)/20),2)
+    ggplot(eventdat,aes(x = nevents)) + theme_minimal() +
+      geom_histogram(binwidth = 1,color = "black", fill = "light grey") +
+      labs(title = paste("Distribution of number events across scenarios",runID),
+           x = "Number of DR events in scenario",
+           y = "number of scenarios") +
+      coord_cartesian(xlim  = c(10,75)) +
+      ggsave(paste0(plot_fol,"eventNum_hist_",runID,"_",runDate,".png"), width = 6, height = 5)
+  # } else {
+    # print("All scenarios have the same number of events")
+  # }
+## identify length of each event and plot ##
+  # Try using group_by(event_number) %>% summarise(eventlength = n())
+  eventlength = drdat2 %>%
+    group_by(eventnum, scenarionum) %>% 
+    summarise(length = n())
+  
+  #  all together
+  p = ggplot(eventlength, aes(x = length)) +
+    geom_histogram(binwidth = 1,color = "black", fill = "light grey") + 
+    theme_minimal() +
+    coord_cartesian(xlim=c(0,14))+
+    labs(x = "Duration of DR event (hours)", y = "Number of events",
+         title = paste("Distribution of event length across all scenarios",runID))
+  
+  p + 
+    ggsave(paste0(plot_fol,"eventLength_hist_",runID,"_",runDate,".png"), width = 6, height = 5)
+  
+  # faceted by scenario
+  p + labs(title = paste("Distribution of event length by scenario",runID)) +
+    facet_wrap(~scenarionum, nrow = 5) + 
+    theme_bw()+
+    coord_cartesian(xlim=c(0,14))+
+    ggsave(paste0(plot_fol,"eventLength_byScenario_hist_",runID,"_",runDate,".png"), width = 10, height = 8)
+  
+## identify start time of each event ##
+    # convert T to an hour of the day  (maybe also day of week?)
+    # summarise & plot
+  first_hour = ymd_hm("2016-01-01 00:00")
+  drdat2$datetime = first_hour + hours(drdat2$t -1) #TODO:IS T 0-INDEXED OR 1 INDEXED?
+  drdat2$hour = hour(drdat2$datetime)
+  
+  drdat_starthours = filter(drdat2, eventStart==1)
+  ggplot(drdat_starthours,aes(x=hour)) +
+    geom_histogram(breaks = seq(-0.5,25.5, by = 1), color = "black", fill = "light grey") + theme_minimal() +
+    labs(x = "hour of the day", y = "number of events",
+         title = paste("Distribution of initial hour of events",runID)) +
+    coord_cartesian(xlim = c(0,24)) +
+    ggsave(paste0(plot_fol,"event_startHour_hist_",runID,"_",runDate,".png"), width = 6, height = 5)
+  
+  ggplot(drdat2, aes(x=hour)) +
+    geom_histogram(breaks = seq(-0.5,25.5, by = 1),color = "black", fill = "light grey") + 
+    theme_minimal() +
+    labs(x = "hour of the day", y = "number of events",
+         title = paste("Distribution of hours when DR is on",runID))+
+    coord_cartesian(xlim = c(0,24)) +
+    ggsave(paste0(plot_fol,"event_dispatchedHours_hist_",runID,"_",runDate,".png"), width = 6, height = 5)
+  
+  
+  # create a DF of output data
+  
+  # save output DF somewhere
+  
+}
+
+
+# getDRAllData
+# Return a dataframe containing all  DR commitment and dispatch info
+# names of returned dataframe are:
+# [1] "t"            "scenario"     "nperiod"      "GEN_IND"      "value.commit"
+# [6] "DR_IND"       "value.prod" 
+    # to run - 
+    # runID = "advNot3_o25_keyDays2"
+    # runDate  = "2019-12-12"
+    # getDRAllData(runID,runDate)
+getDRAllData = function(runID, runDate, 
+                        inputfolID =  "5d_6o_keyDays2", 
+                        base_fol = baseFol, input_fol = inputFol, 
+                        output_fol_base = outputFolBase, savecsv=FALSE){
+  
+  outputfolID = paste0(runID,"_",runDate)
+  
+  # load params
+  instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
+  if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist ", instance_in_fol)}
+  output_fol = paste0(output_fol_base,outputfolID,"/")
+  
+  if(!SHRLK){
+    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+  }else{
+    inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
+  }
+  allinputs = read_csv(inputs_file)
+  params = allinputs[,c("input_name",runID)]
+  params = spread(params, key = input_name, value = runID)
+  endtrim = as.numeric(params$overlapLength)/2
+  
+  # load commitment and  production data
+  allcomt = loadTimeseriesData(output_fol,"u_commitment",as.numeric(params$overlapLength),2, probabilities=F,instance_in_fol,
+                               params$nrandp,dist_ID = params$stochID,endtrim)
+  drcomt = filter(allcomt,str_detect(GEN_IND,"DR-"))
+  rm(allcomt)
+  
+  drprod = loadTimeseriesData(output_fol,"DR_production",as.numeric(params$overlapLength),2, probabilities=F,instance_in_fol,
+                              params$nrandp,dist_ID = params$stochID, endtrim)
+  
+  # combine &  generate scenarionum  for convenience
+  dralldata = merge(drcomt, drprod, by=c("t","scenario","nperiod"), suffixes = c(".commit",".prod"))
+  dralldata$scenarionum = as.numeric(substr(dralldata$scenario,2,4))
+
+  # save
+  if(savecsv){
+    write_csv(dralldata, paste0(output_fol,runID,"_",runDate,"_dralldata.csv"))
+  }
+  
+  return(dralldata)
+}
+
+## Plot DR Production ####
+#TODO: add ability to plot multiple periods together
+#TODO: have demand, vdem be inputs
 
 # from Nov 20, 2019 commit -  ie before  I tried to edit plotDRUse to plot all periods at once
 plotDRUse = function(runID,runDate,drcommit,
@@ -49,7 +355,7 @@ plotDRUse = function(runID,runDate,drcommit,
   plot_fol = paste0(model_output_fol,"plots/")
   if(!dir.exists(plot_fol)){dir.create(plot_fol)}
   
-  instance_in_fol = paste0(baseFol,inputFol,inputfolID,"/")
+  instance_in_fol = paste0(baseFol,model_input_fol,inputfolID,"/")
   if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist ", instance_in_fol)}
   output_fol = paste0(model_output_fol,outputfolID,"/")
   
@@ -89,7 +395,8 @@ plotDRUse = function(runID,runDate,drcommit,
   demrealo1 = dem_base$demand[firstperiod:lastperiod] * demchange$V1
   demreal = dem_base$demand[firstperiod:lastperiod] * demchange
   demreal$t = firstperiod:lastperiod
-  demreal = gather(demreal,key = "scenario",value = "demand",-t) 
+  demrealwide = demreal
+  demreal = gather(demrealwide,key = "scenario",value = "demand",-t) 
   demreal$scenarionum = substr(demreal$scenario,2,4)
   
   # select demand from just one period #
@@ -135,6 +442,35 @@ plotDRUse = function(runID,runDate,drcommit,
     ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR production with commitment in red"))) +
     ggsave(paste0(plot_fol,runIDs[r],"_",period,"_demand_DRfunction.png"),width = 10, height=7)
   
+  
+  ### Summarise all scenarios togetether ###
+  scenmean = dralldata %>%
+    group_by(t) %>%
+    summarise(p_commit = mean(commitment),
+              mean_prod = mean(production),
+              max_prod = max(production),
+              min_prod = min(production))
+  # add demand back in
+  scenmean = merge(scenmean, demrealwide, by="t")
+  demreal$scenarionum  = as.factor(demreal$scenarionum)
+  
+  dp = ggplot(demreal) + geom_line(aes(x=t-min(t),y=demand, color=scenarionum))
+  dp + ggsave(paste0(plot_fol,period,"_demand.png"),width = 10, height=7)
+  
+  
+  dr = ggplot(scenmean) +
+    geom_line(aes(x=t-min(t), y=mean_prod), color="blue")+
+    geom_line(aes(x=t-min(t), y = min_prod), color = "light blue")+
+    geom_line(aes(x=t-min(t), y = max_prod), color = "light blue")+
+    coord_cartesian(ylim =c(0,1000)) +
+    geom_point(aes(x=t-min(t), y=mean_prod, color = p_commit), shape=1, size = 0.5) + 
+    scale_color_gradient(low="black",high="red")+
+    ggtitle(paste(runIDs[r], paste("Period",numperiod,"mean/min/max DR production with mean commitment in red"))) #+
+  dr +  ggsave(paste0(plot_fol,runIDs[r],"_",period,"_DR_prob.png"),width = 10, height=7)
+  
+  # multplot = ggarrange(dp, dr, nrow = 2) 
+  # ggexport(multplot, filename = paste0(plot_fol,runIDs[r],"_",period,"_DR_demand_prob.png"), 
+  #          align = "v", width = 800, height = 560)
 }
 
 
