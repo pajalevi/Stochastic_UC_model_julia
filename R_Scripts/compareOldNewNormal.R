@@ -7,7 +7,7 @@ library(scales)
 modpalette = brewer_pal(palette = "Dark2")(6)
 modpalette[1] = "blue"
 
-results = read_csv(file = file.choose())
+# results = read_csv(file = file.choose())
 
 outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/"
 # oldResults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_INFORMSruns_NovAnalysis.csv")
@@ -16,7 +16,12 @@ outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project
 # reprocessedResults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_preINFORMS_reprocessed_prod_11-14.csv")
 # #new70results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_INFORMS_70DR (1).csv")
 # new70results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_postINFORMS_all.csv")
-# 
+slowhydroresults =  read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_slow_hydro.csv")
+slowhydroresults$hydro  = "slow"
+otherresults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_with_rand_02-11.csv")
+otherresults$hydro = "fast"
+results = rbind.fill(slowhydroresults,otherresults)
+
 # # oldResults$edition = "old"
 # newResults$edition = "new"
 # revertResults$edition = "revert"
@@ -45,11 +50,14 @@ results$`expected cost reduction hibound`[noDR_sel] = results$`Expected cost red
 rand_sel = (results$type == "rand")
 results$dr_varcost = as.factor(results$dr_varcost)
 pd <- position_dodge(0.5)
-p = ggplot(results, aes(x = type, y = `Expected cost reduction from DR`, color = dr_varcost, shape = dr_varcost)) +
+p = ggplot(results, aes(x = type, y = `Expected cost reduction from DR`, 
+                        # color = dr_varcost, shape = dr_varcost)) +
+                        color = dr_varcost, shape = hydro))+
+  
   # geom_jitter(width = 0.5) +
   geom_point() +
-  # geom_text(aes(label = runID),size = 3) +
-  geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`), 
+  geom_text(aes(label = runID),size = 2) +
+  geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`, linetype = hydro), 
                 width=.15, position = pd) +
   theme_minimal() +
   scale_color_manual(values = modpalette) +

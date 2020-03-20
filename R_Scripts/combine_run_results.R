@@ -11,7 +11,6 @@ library(tidyverse)
 library(viridis)
 library(data.table)
 
-source("./getModelParams.R")
 options(warn=1) # print warnings as they occur
 
 SHRLK = TRUE
@@ -31,6 +30,7 @@ if(SHRLK){
 ## source files ##
 source(paste0(baseFol,"/code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
 source(paste0(baseFol,"/code/R_Scripts/consolidatedAnalysisFns.R")) # genBreakdown()
+source(paste0(baseFol,"/code/R_Scripts/getModelParams.R"))
 
 
 ### PARAMS ####----##
@@ -334,6 +334,9 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   #---------------------------------
   ## consolidated data of generation source: fuelBreakdown() ####
+  if(!file.exists(paste0(output_fol_base,"plots/"))){
+    mkdir(paste0(output_fol_base,"plots/"))
+  }
   genbreakdown = fuelBreakdown(prod2,paste0(output_fol_base,"plots/"),runID)
   genbreakdown = select(genbreakdown, Fuel, prodFrac)
   genbreakdown$Fuel = paste0("GENFRAC-",genbreakdown$Fuel)
