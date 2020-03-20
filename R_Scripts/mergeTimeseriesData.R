@@ -22,8 +22,10 @@ library(data.table)
 # allowedperiods = read.csv(paste0("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/base_2019-02/","periods_overlap_base_advNot2.csv"))
 ########
 
-loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_fol, nscen,
-                               probabilities = T,dist_ID,endtrim#,
+loadTimeseriesData <- function(output_fol, dataType, overlap = NULL, dataStage, input_fol, nscen,
+                               probabilities = T,dist_ID,endtrim = NULL,beginningtrim=NULL,
+                               overrideOverlap = T # if F, overlap and endtrim are used. if T, prev_overlap is used to determine trimming
+                                                   # trimming more from end than beginning in case of odd numbered overlap
                                # validP = allowedperiods
                                ){
  # dist_ID="winter_ercot"
@@ -56,6 +58,39 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
   print(prev_overlap)
   # if i-th  prev_overlap <0 , then (i+1)th period overlaps with previous
   # this should obviate 'overlap'
+  if(overrideOverlap){ # set endtrim, beginningtrim based on overlap
+    #find >0 prev_overlaps
+    observed_overlap = unique(prev_overlap[prev_overlap>0])
+    if(length(observed_overlap)>1){warning("two different overlap lengths were observed: ", observed_overlap)
+    } else {
+      print(paste("observed overlap is ", observed_overlap))
+    }
+    
+    # is observed_overlap odd?
+    odd=NULL
+    if((observed_overlap %% 2) == 0) {
+      print(paste(observed_overlap,"is Even"))
+      odd = F 
+    } else {
+      print(paste(observed_overlap,"is Odd"))
+      odd = T
+    }
+    # set beginningtrim, endtrim
+    beginningtrim = floor(observed_overlap/2)
+    endtrim = floor(observed_overlap/2) + odd # if odd is T, will add 1 to endtrim
+    overlap = observed_overlap # but this shouldnt really be used
+    
+  } else { #check for NULLs and fill in appropriately
+    if(is.null(overlap)){
+      error("overlap is NULL, while overrideOverlap is FALSE: either override overlap with observed data, or provide a specified overlap to use")
+    }
+    if(is.null(beginningtrim)){
+      beginningtrim = floor(overlap/2)
+    }
+    if(is.null(endtrim)){
+      endtrim = floor(overlap/2)
+    }
+  }
   
   
   ## check if any of the prev_overlap entries that are <0 are not the correct overlap. if so stop.
@@ -115,19 +150,19 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
         output$t = firstperiod:lastperiod
       } else{ stop("dataStage ", dataStage," is invalid. must be 1 or 2")}
       
-      # trim output
+  ### trim output ###
       if(i ==1){ ## is this the first period? 
         
         print(paste("period",periodnum, "encompassing",firstperiod,"-",lastperiod,"is the first period"))
         if(prev_overlap[i] > 0){ #does it overlap with second period
           # trim beginning with endtrim
           # trim end with overlap
-          tSel = which(output$t >= firstperiod + endtrim & 
-                         output$t <= lastperiod - overlap/2)
+          tSel = which(output$t >= firstperiod + beginningtrim & 
+                         output$t <= lastperiod - endtrim)
           print(paste("period number",periodnum,"overlaps with next period"))
         } else {
           ## trim both ends with endtrim
-          tSel = which(output$t >= firstperiod + endtrim & 
+          tSel = which(output$t >= firstperiod + beginningtrim & 
                          output$t <= lastperiod - endtrim)
           print(paste("period number",periodnum,"does not overlap with next period"))
         }
@@ -139,18 +174,18 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
             #TODO: use periodnum info
             # trim beginning with overlap
             # trim end with endtrim
-            tSel = which(output$t >= firstperiod + overlap/2 & 
+            tSel = which(output$t >= firstperiod + beginningtrim & 
                            output$t <= lastperiod - endtrim)
             print(paste("period number",periodnum,"is the last period"))
           } else if(prev_overlap[i] > 0){ # does it overlap with next period?
             # trim both ends with overlap
-            tSel = which(output$t >= firstperiod + overlap/2 & 
-                           output$t <= lastperiod - overlap/2)
+            tSel = which(output$t >= firstperiod + beginningtrim & 
+                           output$t <= lastperiod - endtrim)
             print(paste("period number",periodnum,"overlaps with next period"))
           } else { # does not overlap with next period
             # trim beginning with overlap
             # trim end with endtrim
-            tSel = which(output$t >= firstperiod + overlap/2 & 
+            tSel = which(output$t >= firstperiod + beginningtrim & 
                            output$t <= lastperiod - endtrim)
             print(paste("period number",periodnum,"does not overlap with next period"))
           }
@@ -159,18 +194,18 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
           if(i==nfiles){ # is it the last period?
             # trim beginning with endtrim
             # trim end with endtrim
-            tSel = which(output$t >= firstperiod + endtrim & 
+            tSel = which(output$t >= firstperiod + beginningtrim & 
                            output$t <= lastperiod - endtrim)
             print(paste("period number",periodnum,"is the last period"))
           } else if(prev_overlap[i] > 0){ # does it overlap with next period?
             # trim beginning with endtrim
             # trim end with overlap
-             tSel = which(output$t >= firstperiod + endtrim & 
-                           output$t <= lastperiod - overlap/2)
+             tSel = which(output$t >= firstperiod + beginningtrim & 
+                           output$t <= lastperiod - endtrim)
              print(paste("period number",periodnum,"overlaps with next period"))
           } else { # does not overlap with next period
             # trim both ends with endtrim
-            tSel = which(output$t >= firstperiod + endtrim & 
+            tSel = which(output$t >= firstperiod + beginningtrim & 
                            output$t <= lastperiod - endtrim)
             print(paste("period number",periodnum,"does not overlap with next period"))
           }
@@ -178,7 +213,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap, dataStage, input_f
       }
       output = output[tSel,] 
       
-      # combine with previous
+  ### combine with previous ##
       if(i==1){ output_all = output 
       } else { 
         # output_all = rbind(output_all, output) 

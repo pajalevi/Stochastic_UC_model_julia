@@ -16,7 +16,8 @@ SHRLK = TRUE
 ## FILE STRUCTURE ##
 if(SHRLK){
   base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  output_fol_base  = "/home/groups/weyant/plevi_outputs/"
+  output_fol_base  = "/home/groups/weyant/plevi_outputs/slow_hydro/"
+  # output_fol_base = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
   input_fol = "inputs/"
 } else{
   base_fol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"
@@ -130,7 +131,7 @@ runDates20 = rep("2019-11-07",5)
 runIDs21 = c("advNot2_keyDays2","advNot3_keyDays2")
 runDates21 = rep("2019-11-15",2)
 
-xx = list.files(path = output_fol_base, pattern = "*_o25_*keyDays2")
+xx = list.files(path = output_fol_base, pattern = glob2rx("*_o25_*keyDays2*"))
 runIDs22 = substr(xx, 1, nchar(xx)-11)
 runDates22 = substr(xx, nchar(xx)-9,100)
 
@@ -151,9 +152,13 @@ last_loc = as.vector(regexpr("\\_[^\\_]*$", yy))
 runIDs26 = substr(yy, 1, last_loc - 1)
 runDates26 = substr(yy, last_loc+1,100)
 
+#HYDRO AS SLOW GENERATOR RUNS
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern = glob2rx("*_o25_*keyDays2*"))
+runIDs27 = substr(xx, 1, nchar(xx)-11)
+runDates27 = substr(xx, nchar(xx)-9,100)
 
-runIDs = c(runIDs26)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates26)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs = c(runIDs27)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates27)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
@@ -165,8 +170,8 @@ rampdata_df = F
 loadOverrideOption = T# should prod be re-calculated?
 ##----##----##----##
 
-instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
-default_in_fol = paste0(base_fol,input_fol,"ercot_default/")
+instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/") # e.g. "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/5d_6o_keyDays2/"
+default_in_fol = paste0(base_fol,input_fol,"ercot_default/")  # e.g. "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/ercot_default/"
 
 if(!SHRLK){
   source(paste0(base_fol,"Julia_UC_Github/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
@@ -185,7 +190,8 @@ if(summary_combine){
   for(r in 1:length(runIDs)){
     print(runIDs[r])
     # if(file.exists(paste(base_fol,outputFolBase,runIDs[r],"_",runDates[r]))){
-      combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption)
+      combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption,
+                        base_fol = base_fol, output_fol_base = output_fol_base)
     # } else if(file.exists(paste(scratch_output_fol,runIDs[r],"_",runDates[r]))) {
       # combineRunResults(runIDs[r],runDates[r],graphs=F,load_override = loadOverrideOption,
                         # input_fol = scratch_)
