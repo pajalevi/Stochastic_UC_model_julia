@@ -103,12 +103,16 @@ runIDs26 = substr(yy, 1, last_loc - 1)
 runDates26 = substr(yy, last_loc+1,100)
 
 #HYDRO AS SLOW GENERATOR RUNS
-xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern = glob2rx("*_o25_*keyDays2*"))
+# xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern = glob2rx("*_o25_*keyDays2*"))
+xx = c("advNot1_o25_keyDays2_2020-02-03", "advNot2_o25_keyDays2_2020-02-03",
+       "advNot3_o25_keyDays2_2020-02-03", "energy1_o25_keyDays2_2020-02-03",
+       "energy2_o25_keyDays2_2020-02-03", "energy3_o25_keyDays2_2020-02-03",
+       "noDR_o25_keyDays2_2020-02-03")
 runIDs27 = substr(xx, 1, nchar(xx)-11)
 runDates27 = substr(xx, nchar(xx)-9,100)
 
-runIDs = c(runIDs27)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates27)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 
 
@@ -117,7 +121,7 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
   library(plyr) #for rbind.fill
   if(SHRLK){
     base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-    output_fol_base  = "/home/groups/weyant/plevi_outputs/slow_hydro/"
+    output_fol_base  = "/home/groups/weyant/plevi_outputs/"
     # output_fol_base = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
     input_fol = "inputs/"
     inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")

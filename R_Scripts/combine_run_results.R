@@ -335,7 +335,7 @@ combineRunResults <- function(runID, runDate, graphs = T,
   #---------------------------------
   ## consolidated data of generation source: fuelBreakdown() ####
   if(!file.exists(paste0(output_fol_base,"plots/"))){
-    mkdir(paste0(output_fol_base,"plots/"))
+    dir.create(paste0(output_fol_base,"plots/"))
   }
   genbreakdown = fuelBreakdown(prod2,paste0(output_fol_base,"plots/"),runID)
   genbreakdown = select(genbreakdown, Fuel, prodFrac)

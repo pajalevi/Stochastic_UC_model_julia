@@ -19,7 +19,7 @@ library(lubridate)
 SHRLK = TRUE
 if(SHRLK){
   baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  outputFolBase = "/home/groups/weyant/plevi_outputs/slow_hydro/"
+  outputFolBase = "/home/groups/weyant/plevi_outputs/"
   # outputFolBase = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
   inputFol = "inputs/"
   scriptsFol = "code/"
@@ -330,6 +330,102 @@ getDRAllData = function(runID, runDate,
   
   return(dralldata)
 }
+
+getCO2data = function(runID,runDate, 
+                      inputfolID =  "5d_6o_keyDays2", 
+                      base_fol = baseFol, input_fol = inputFol, 
+                      output_fol_base = outputFolBase, savecsv=FALSE){
+ #setup and params
+  outputfolID = paste0(runID,"_",runDate)
+  # load params
+  instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/")
+  if(!dir.exists(instance_in_fol)){stop("julia input file doesnt exist ", instance_in_fol)}
+  output_fol = paste0(output_fol_base,outputfolID,"/")
+  if(!SHRLK){
+    inputs_file = paste0(base_fol,"/Julia_UC_Github/Julia_scripts/inputs_ercot.csv")
+  }else{
+    inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
+  }
+  allinputs = read_csv(inputs_file)
+  params = allinputs[,c("input_name",runID)]
+  params = spread(params, key = input_name, value = runID)
+  endtrim = as.numeric(params$overlapLength)/2
+  
+  # load production data
+  prod = read_csv(file = paste0(output_fol,"prod.csv"))
+  
+  # load generator data
+  gendat = read_csv(file = paste0(base_fol,input_fol,"ercot_default/",params$genFile))
+  # PLC2ERTA in generator data has units of lb/MWh
+  noco2 = which(is.na(gendat$PLC2ERTA))
+  for(i in 1:length(noco2)){
+    fueltype = gendat$Fuel[noco2[i]]
+    meanco2 = mean(gendat$PLC2ERTA[gendat$Fuel == fueltype],na.rm=T)
+    if(is.na(meanco2)){
+      print(paste0("Mean co2 emissions not identified for ", gendat$plantUnique[noco2[i]]))
+      meanco2 = 0
+    }
+    print(paste0("CO2 intensity for ", gendat$plantUnique[noco2[i]]," set to ", meanco2))
+    gendat$PLC2ERTA[noco2[i]] = meanco2
+  }
+
+  # merge gendat with prod
+  prod2 = merge(prod,gendat,by.x="GEN_IND",by.y = "plantUnique")
+  
+  prod3 = prod2 %>%
+    mutate(co2emit = PLC2ERTA*MWout) %>%
+    group_by(Fuel,t,scenario) %>%
+    summarise(co2 =  sum(co2emit))
+  
+  if(savecsv){
+    write_csv(prod3, paste0(output_fol,runID,"_",runDate,"_co2data.csv"))
+  }
+  
+  return(prod3)
+}
+
+plotCO2 = function(runID,runDate){
+  #plot of CO2 emissions by  generator type for a given run
+  
+}
+
+plotallCO2 = function(folder,searchString){
+  # plot of CO2 emissions across all runs
+  # each run is represented by a boxplot showing range of emissions across scenarioss
+  xx = list.files(path = folder, pattern = glob2rx(searchString))
+  runIDs = substr(xx, 1, nchar(xx)-11)
+  runDates = substr(xx, nchar(xx)-9,100)
+  
+  #get all CO2 data
+  for(i in 1:length(xx)){
+    if(file.exists(paste0(folder,runIDs[i],"_",runDates[i],"/",runIDs[i],"_",runDate,"_co2data.csv"))){
+      co2emit = read.csv(paste0(folder,runIDs[i],"_",runDates[i],"/",runIDs[i],"_",runDate,"_co2data.csv"))
+    } else {
+      co2emit = getCO2data(runIDs[i],runDates[i],savecsv = TRUE)
+    }
+    co2emit = co2emit %>%
+      group_by(scenario) %>%
+      summarise(allco2emit = sum(co2))
+    co2emit$run = xx[i]
+    
+    if(i==1){
+      allco2 = co2emit
+    } else {
+      allco2 = rbind(allco2,co2emit)
+    }
+  }
+  
+  # plot
+  plot_fol =  paste0(folder,"plots/")
+  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+ ggplot(allco2,aes(x =  run, y = allco2emit)) + geom_boxplot() +
+   theme_minimal()+
+   theme(axis.text.x =  element_text(angle=90,hjust=1))+
+   ggsave(paste0(plot_fol,"all_co2_boxplot.png"),width = 12, height=9)
+ return(allco2)
+}
+# source("./consolidatedAnalysisFns.R")
+# plotallCO2(folder = "/home/groups/weyant/plevi_outputs/", searchString = "*_o25*keyDays2*")
 
 ## Plot DR Production ####
 #TODO: add ability to plot multiple periods together
@@ -681,7 +777,7 @@ rampInfo = function(prodgendat,runName){
 }
 
 
-drDispatchStats = function(runID,runDate,
+drDispatchStats_underConstruction = function(runID,runDate,
                            inputfolID, 
                            scenarios = 1:5, # what scenarios will be graphed
                            overlaplength = 6, #loadTimeseriesData param
