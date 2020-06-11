@@ -1,4 +1,6 @@
 # plotDispatchAndValue
+# makes plots of DR dispatch info vs system value
+# function to be used on Sherlock
 # April 2020
 
 library(tidyverse)
