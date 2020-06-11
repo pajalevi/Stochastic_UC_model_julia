@@ -16,9 +16,11 @@ outputfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project
 # reprocessedResults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_preINFORMS_reprocessed_prod_11-14.csv")
 # #new70results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_INFORMS_70DR (1).csv")
 # new70results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/INFORMS_results/combined_summary_postINFORMS_all.csv")
-slowhydroresults =  read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_slow_hydro.csv")
+
+slowhydroresults =  read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_slow_hydro_04-05.csv")
 slowhydroresults$hydro  = "slow"
-otherresults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_with_rand_02-11.csv")
+otherresults = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_04-01.csv")
+# # otherresults  = filter(otherresults,!str_detect(runID,"advNot1_o25_c2"))
 otherresults$hydro = "fast"
 results = rbind.fill(slowhydroresults,otherresults)
 
@@ -38,8 +40,10 @@ results = rbind.fill(slowhydroresults,otherresults)
 noDR_sel = (results$type == "noDR")
 results$dr_varcost = as.factor(results$dr_varcost)
 results$cost_lowbound = results$`expected Total costs` - (results$`expected Total costs` * results$MIPGapParam)
-results$`expected cost reduction lowbound` = results$`Expected cost reduction from DR` - (results$`expected Total costs` * results$MIPGapParam)
-results$`expected cost reduction hibound` = results$`Expected cost reduction from DR` + (results$`expected Total costs` * results$MIPGapParam[noDR_sel]) # this should be related to noDR MIPGAP
+# results$`expected cost reduction lowbound` = results$`Expected cost reduction from DR` - (results$`expected Total costs` * results$MIPGapParam)
+# results$`expected cost reduction hibound` = results$`Expected cost reduction from DR` + (results$`expected Total costs` * results$MIPGapParam[noDR_sel]) # this should be related to noDR MIPGAP
+results$`expected cost reduction hibound` = results$`Expected cost reduction from DR` + (results$`expected Total costs` * results$MIPGapParam) # this should be related to noDR MIPGAP
+results$`expected cost reduction lowbound` = results$`Expected cost reduction from DR` #- (results$`expected Total costs` * results$MIPGapParam[noDR_sel])
 
 results$`expected cost reduction hibound`[noDR_sel] = results$`Expected cost reduction from DR`[noDR_sel]
 
@@ -49,22 +53,27 @@ results$`expected cost reduction hibound`[noDR_sel] = results$`Expected cost red
 
 rand_sel = (results$type == "rand")
 results$dr_varcost = as.factor(results$dr_varcost)
+results$runlabel = substr(results$runID,1,as.vector(regexpr("_",results$runID))-1)
 pd <- position_dodge(0.5)
-p = ggplot(results, aes(x = type, y = `Expected cost reduction from DR`, 
+p = ggplot(filter(results,dr_varcost != 70, type != "start"), aes(x = type, y = `Expected cost reduction from DR`,
+# p = ggplot(results, aes(x = type, y = `Expected cost reduction from DR`, 
                         # color = dr_varcost, shape = dr_varcost)) +
-                        color = dr_varcost, shape = hydro))+
+                        color = hydro, shape = hydro))+
+                        # color = dr_varcost))+#, shape = hydro))+
   
   # geom_jitter(width = 0.5) +
   geom_point() +
-  geom_text(aes(label = runID),size = 2) +
-  geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`, linetype = hydro), 
+  geom_text(aes(label = runlabel),size = 2,vjust = 0, hjust  = -0.6) +
+  geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`),#, linetype = hydro),
+  # geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`, linetype = hydro), 
                 width=.15, position = pd) +
   theme_minimal() +
   scale_color_manual(values = modpalette) +
-  labs(y = "Savings from adding DR") 
+  labs(y = "Savings relative to no DR scenario") 
+
 p
 p + 
-  ggsave(paste0(outputfol,"new_results.png"), width = 6, height = 5)
+  ggsave(paste0(outputfol,"new_results_04-06_slowhydro.png"), width = 6, height = 5)
 
 
 

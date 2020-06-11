@@ -1,0 +1,238 @@
+---
+title: "Inspect CO2 emissions 04-02-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message=FALSE, warning=FALSE)
+```
+
+## R Markdown
+
+<!-- This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>. -->
+<!-- When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this: -->
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# load data
+library(tidyverse)
+datafolder = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/"
+runs = c("advNot1_o25_keyDays2_2019-12-11","advNot3_o25_c2_keyDays2_2019-12-12","advNot3_o25_keyDays2_2019-12-12",
+         "noDR_o25_keyDays2_2019-12-04","hour2_o25_keyDays2_2020-02-03","hour2_o25_c2_keyDays2_2019-12-20")
+# last_locs = as.vector(regexpr("\\_[^\\_]*$", runs))
+last_locs = as.vector(regexpr("key", runs))
+runIDs = substr(runs, 1, last_locs - 2)
+
+# load all data and consolidate
+for(i in 1:length(runs)){
+    filename = paste0(datafolder,runs[i],"_co2data.csv")
+    # print(paste("loading",filename))
+    co2emit = read_csv(filename)
+      
+    co2emit$run = runIDs[i]
+    
+    if(i==1){
+      allco2 = co2emit
+    } else {
+      allco2 = rbind(allco2,co2emit)
+    }
+}
+
+# make DF for plot of co2 emissions by fuel  type
+co2emit_sum = allco2 %>%
+  group_by(Fuel,scenario, run) %>%
+  summarise(co2tot = sum(co2)) %>%
+  group_by(Fuel, run) %>%
+  summarise(co2mean = mean(co2tot),
+            co2min = min(co2tot),
+            co2max = max(co2tot))
+```
+<!-- AdvNot3_c2 and noDR should have very similar emissions. advNot1 should have lower emissions. (Although this is not what I have seen in plots so far.) -->
+```{r eval=FALSE, include=FALSE}
+  # make the plot
+   ggplot(co2emit_sum,aes(x=Fuel,y=co2mean, color = run)) + 
+      # geom_errorbar(aes(ymin = co2min,  ymax = co2max), color = "grey") +
+      geom_point(shape  = 1) + theme_minimal() +
+      # facet_wrap(~run) +
+      # geom_text(aes(label = round(co2mean,0)),size = 2,vjust=-1, angle = 15) +
+      theme(axis.text.x =  element_text(angle=90,hjust=1)) +
+      labs(title  = paste("CO2 emissions  by generator type,",runIDs[i],"\n error bars give range across scenarios"),
+           y = "Tons CO2 emitted")
+```
+
+<!-- The above plot makes it difficult to see differences. Lets look at the difference between the advNot runs and the noDR runs -->
+
+```{r,echo=FALSE}
+# make a dataframe that allows us to visualize the difference
+co2emit_diff = co2emit_sum %>%
+  pivot_wider(names_from = run, values_from = c(co2mean,co2min,co2max)) %>%
+  group_by(Fuel) %>%
+  summarise(advNot1 = co2mean_advNot1_o25 - co2mean_noDR_o25,
+            advNot3c2 = co2mean_advNot3_o25_c2 - co2mean_noDR_o25,
+            advNot3 = co2mean_advNot3_o25 - co2mean_noDR_o25,
+            hour2 = co2mean_hour2_o25 - co2mean_noDR_o25,
+            hour2c2 = co2mean_hour2_o25_c2 - co2mean_noDR_o25) %>%
+  pivot_longer(cols = -Fuel,names_to = "run", values_to = "co2_diff")
+```
+
+
+```{r,echo=FALSE}
+ggplot(co2emit_diff,aes(x = Fuel, y = co2_diff, color = run)) + geom_point() +
+  theme_minimal() + theme(axis.text.x =  element_text(angle=90,hjust=1)) +
+  labs(title = "Difference in mean emissions from noDR scenario", y = "Mean CO2 emissions (Tons)")
+```
+
+We have observed that advNot1 has emissions that are somewhat lower than noDR, and advnot3c2 has emissions that are even lower. Here, we can see that in the case of advNot1, that reduction comes from lower use of gas generators, though use of coal is higher. In the case of advNot3c2, a reduction in coal emissions drives lower emissions. Why does coal use differ so much between the scenarios? And why does advNot3c2 change coal usage so substantially?
+
+hour2 has very similar total emissions to noDR, but looking more closely it shares more with advNot1; higher coal emissions, lower (generally)  gas emissions.
+hour2c2 seems to tract advNot3c2 relatively well. Lets look at these pulled apart a bit in groups . (high cost), (advNot3)
+
+What would happen if, instead of looking at the difference in mean emissions, we looked at the mean difference? Are scenarios individually similar?
+
+What can looking at the supply curve tell us?
+
+```{r, echo=FALSE}
+# taken form plat_level_data_readin_DR.R
+xx = read.csv(file = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_input/ercot_default/complete_generator_correctedGas_Start_Ramp_8-28-19.csv")
+ordered = order(xx[,"VCost"]) # gives the indices of VCost in ascending value
+sorted = xx[,"Capacity"][ordered]
+cumsorted = cumsum(sorted)
+
+plotdf <- data.frame(x=cumsorted, 
+                     cost=xx[,"VCost"][ordered],
+                     totcost = (xx[,"VCost"][ordered] + xx[,"StartCost"][ordered]/120), #spread startup costs over 264 hours for full_test
+                     Technology=xx[,"Fuel"][ordered],
+                     cap = xx[,"Capacity"][ordered],
+                     GENID = xx[,"plantUnique"][ordered])
+plotdf$loc <- cumsum(plotdf$cap) - plotdf$cap/2
+plotdf$cost[which(plotdf$cost==0)] = -10
+
+plotdf$Technology = factor(plotdf$Technology,levels = c("BIOMASS","COAL", "DR", "GAS_CC", "GAS_CT", "GAS_ICE", "GAS_ST", "HYDRO", "LANDFILL_GAS", "NUCLEAR", "OIL", "SOLAR", "WIND"))
+cbbPalette <- c( "#999999",#biomass
+                 "black",#coal
+                "purple",  #DR
+                 "#56B4E9", #gas CC
+                 "#E69F00", # gas CT
+                 "#a6cee3", #gas ICE
+                 "#0072B2", #gas ST
+                 "#000099", #hydro
+                 "#b2df8a",  #landfill gas
+                 "#009E73",#nuclear
+                 "#CC0000", #oil
+                 "yellow",#solar
+                  "#CC79A7",#wind
+                 "#F0E442",
+                 "green",
+                 "red")
+
+
+ggplot(plotdf, aes(x=loc,y=cost,width=cap,fill=Technology)) + 
+  #  geom_point(aes(color=Technology)) +
+  #  geom_bar(binwidth = 0,aes(fill=Technology), stat="identity", position="identity") +
+  geom_bar(stat="identity") +
+  scale_fill_manual(values=cbbPalette) +
+  labs(x="Cumulative Capacity (MW)",y="Variable Cost ($/MWh)") + 
+  ggtitle(paste("ERCOT's Electriciy Supply Curve with $35/MWh DR")) + 
+  theme(legend.position = "bottom")
+```
+
+When DR is $70/MWh, this is what the supply curve looks like:
+
+```{r echo=FALSE}
+xx$VCost[xx$Fuel == "DR"] = 70
+ordered = order(xx[,"VCost"]) # gives the indices of VCost in ascending value
+sorted = xx[,"Capacity"][ordered]
+cumsorted = cumsum(sorted)
+
+plotdf <- data.frame(x=cumsorted, 
+                     cost=xx[,"VCost"][ordered],
+                     totcost = (xx[,"VCost"][ordered] + xx[,"StartCost"][ordered]/120), #spread startup costs over 264 hours for full_test
+                     Technology=xx[,"Fuel"][ordered],
+                     cap = xx[,"Capacity"][ordered],
+                     GENID = xx[,"plantUnique"][ordered])
+plotdf$loc <- cumsum(plotdf$cap) - plotdf$cap/2
+plotdf$cost[which(plotdf$cost==0)] = -10
+
+plotdf$Technology = factor(plotdf$Technology,levels = c("BIOMASS","COAL", "DR", "GAS_CC", "GAS_CT", "GAS_ICE", "GAS_ST", "HYDRO", "LANDFILL_GAS", "NUCLEAR", "OIL", "SOLAR", "WIND"))
+
+ggplot(plotdf, aes(x=loc,y=cost,width=cap,fill=Technology)) + 
+  #  geom_point(aes(color=Technology)) +
+  #  geom_bar(binwidth = 0,aes(fill=Technology), stat="identity", position="identity") +
+  geom_bar(stat="identity") +
+  scale_fill_manual(values=cbbPalette) +
+  labs(x="Cumulative Capacity (MW)",y="Variable Cost ($/MWh)") + 
+  ggtitle(paste("ERCOT's Electriciy Supply Curve with $70/MWh DR")) + 
+  theme(legend.position = "bottom")
+
+```
+
+When DR requires an advance dispatch (ie. advNot3 cases), it can displace coal because even in scenarios where coal would have been more economical, DR is already operating and pushes out more expensive coal. In fact, it leads to a reduction in the use of almost *everything* else (nothing appears to increase meaningfully).
+```{r,echo=FALSE}
+library(stringr)
+ggplot(filter(co2emit_diff, str_detect(run,c("advNot3"))),aes(x = Fuel, y = co2_diff, color = run)) + geom_point() +
+  theme_minimal() + theme(axis.text.x =  element_text(angle=90,hjust=1)) +
+  labs(title = "Difference in mean emissions from noDR scenario: advance dispatch runs", y = "Mean CO2 emissions (Tons)")
+```
+
+When DR does not require advance dispatch (in this case, advNot1, hour2), the results are more mixed. 
+```{r,echo=FALSE}
+ggplot(filter(co2emit_diff, !str_detect(run,c("advNot3"))),aes(x = Fuel, y = co2_diff, color = run)) + geom_point() +
+  theme_minimal() + theme(axis.text.x =  element_text(angle=90,hjust=1)) +
+  labs(title = "Difference in mean emissions from noDR scenario: advance dispatch runs", y = "Mean CO2 emissions (Tons)")
+```
+
+In fact, hour2c2 seems to have more in common with advance dispatch scenarios...
+Compared to cheaper hour2, it results in a much greater reduction in emissions, which is surprising. This reduction is driven mostly by  a large decrease in emissions from Coal as well as Gas_CC (and a bit from Gas_ST) plants. All three of these are slow generators. (Gas_ct, gas_ice, and oil are the emitting fast generators).
+
+```{r,echo=FALSE}
+ggplot(filter(co2emit_diff, str_detect(run,c("advNot3")) | str_detect(run,c("hour2c2"))),aes(x = Fuel, y = co2_diff, color = run)) + geom_point() +
+  theme_minimal() + theme(axis.text.x =  element_text(angle=90,hjust=1)) +
+  labs(title = "Difference in mean emissions from noDR scenario: advance dispatch runs", y = "Mean CO2 emissions (Tons)")
+```
+
+So now we know how infrequently-dispatched, expensive DR reduces emissions - by  reducing the usage of other emitting generators. But there are many remaining questions
+
+(1) why does advNot3c2 reduce coal usage more than advNot3?
+(2) why does hour2c2 reduce coal and gas_cc usage while hour2 increases coal usage/emissions?
+
+In both of these cases, the more expensive version of DR reduces the use of cheaper, baseload units MORE. Why? brainstorm --
+* supply curve does not take into account startup costs, which may ultimately shift DR down in the supply curve for short dispatches.
+* though that would not really be enough to create this effect.
+
+What does the supply curve look like if startup costs are distributed over only 2 hours? This is shown in the plot below --  it turns out it doesn't really change that much. So, startup costs are not the explanation.
+
+```{r echo=FALSE}
+xx$VCost[xx$Fuel == "DR"] = 70
+ordered = order(xx[,"VCost"]) # gives the indices of VCost in ascending value
+sorted = xx[,"Capacity"][ordered]
+cumsorted = cumsum(sorted)
+
+plotdf <- data.frame(x=cumsorted, 
+                     cost=xx[,"VCost"][ordered],
+                     totcost = (xx[,"VCost"][ordered] + xx[,"StartCost"][ordered]/2), #spread startup costs over 264 hours for full_test
+                     Technology=xx[,"Fuel"][ordered],
+                     cap = xx[,"Capacity"][ordered],
+                     GENID = xx[,"plantUnique"][ordered])
+plotdf$loc <- cumsum(plotdf$cap) - plotdf$cap/2
+plotdf$cost[which(plotdf$cost==0)] = -10
+
+plotdf$Technology = factor(plotdf$Technology,levels = c("BIOMASS","COAL", "DR", "GAS_CC", "GAS_CT", "GAS_ICE", "GAS_ST", "HYDRO", "LANDFILL_GAS", "NUCLEAR", "OIL", "SOLAR", "WIND"))
+
+ggplot(plotdf, aes(x=loc,y=cost,width=cap,fill=Technology)) + 
+  #  geom_point(aes(color=Technology)) +
+  #  geom_bar(binwidth = 0,aes(fill=Technology), stat="identity", position="identity") +
+  geom_bar(stat="identity") +
+  scale_fill_manual(values=cbbPalette) +
+  labs(x="Cumulative Capacity (MW)",y="Variable Cost ($/MWh)") + 
+  ggtitle(paste("ERCOT's Electriciy Supply Curve with $70/MWh DR")) + 
+  theme(legend.position = "bottom")
+
+```
+<!-- ## Including Plots -->
+
+<!-- You can also embed plots, for example: -->
+
+<!-- ```{r pressure, echo=FALSE} -->
+<!-- plot(pressure) -->
+<!-- ``` -->
+
+<!-- Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot. -->

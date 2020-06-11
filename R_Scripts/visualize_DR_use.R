@@ -131,7 +131,7 @@ runDates20 = rep("2019-11-07",5)
 runIDs21 = c("advNot2_keyDays2","advNot3_keyDays2")
 runDates21 = rep("2019-11-15",2)
 
-xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("*_o25_*keyDays2*"))
+yy = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("*_o25*keyDays2*"))
 last_loc = as.vector(regexpr("\\_[^\\_]*$", yy))
 runIDs22 = substr(yy, 1, last_loc - 1)
 runDates22 = substr(yy, last_loc+1,100)
@@ -162,6 +162,16 @@ xx = c("avail3_o25_c2_keyDays2_2020-03-25","avail3_o25_keyDays2_2020-03-25",
        "avail4_o25_c2_keyDays2_2020-03-25","avail4_o25_keyDays2_2020-03-25")
 runIDs28 = substr(xx, 1, nchar(xx)-11)
 runDates28 = substr(xx, nchar(xx)-9,100)
+
+# avail slow hydro
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern = glob2rx("avail*_o25_*keyDays2*04-01"))
+runIDs29 = substr(xx, 1, nchar(xx)-11)
+runDates29 = substr(xx, nchar(xx)-9,100)
+
+# cheap DR runs
+xx = c("advNot1_o25_c3_keyDays2_2020-04-01","advNot1_o25_c4_keyDays2_2020-04-01")
+runIDs30 = substr(xx, 1, nchar(xx)-11)
+runDates30 = substr(xx, nchar(xx)-9,100)
 
 
 runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)

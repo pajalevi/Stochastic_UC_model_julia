@@ -389,43 +389,100 @@ plotCO2 = function(runID,runDate){
   
 }
 
-plotallCO2 = function(folder,searchString){
+plotallCO2 = function(folder,searchString,saveas  = "all_co2_boxplot",
+                      fast_gens = c("GAS_CT","GAS_ICE","OIL","SOLAR","WIND","HYDRO"),
+                      plots = F){
   # plot of CO2 emissions across all runs
   # each run is represented by a boxplot showing range of emissions across scenarioss
   xx = list.files(path = folder, pattern = glob2rx(searchString))
   runIDs = substr(xx, 1, nchar(xx)-11)
   runDates = substr(xx, nchar(xx)-9,100)
   
+  plot_fol =  paste0(folder,"plots/")
+  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+  
+  
   #get all CO2 data
   for(i in 1:length(xx)){
-    if(file.exists(paste0(folder,runIDs[i],"_",runDates[i],"/",runIDs[i],"_",runDate,"_co2data.csv"))){
-      co2emit = read.csv(paste0(folder,runIDs[i],"_",runDates[i],"/",runIDs[i],"_",runDate,"_co2data.csv"))
+    filename = paste0(folder,runIDs[i],"_",runDates[i],"/",runIDs[i],"_",runDates[i],"_co2data.csv")
+    if(file.exists(filename)){
+      print(paste("loading",filename))
+      co2emit = read.csv(filename)
     } else {
-      co2emit = getCO2data(runIDs[i],runDates[i],savecsv = TRUE)
+      print(paste("creating", filename))
+      co2emit = getCO2data(runIDs[i],runDates[i],output_fol_base = folder, savecsv = TRUE)
     }
-    co2emit = co2emit %>%
+     
+    co2_intermediate = co2emit %>%
+      group_by(Fuel,scenario) %>%
+      summarise(co2tot = sum(co2))
+    co2_intermediate$run = xx[i]
+    co2_intermediate$speed = "slow"
+    for(s in 1:length(fast_gens)){
+        fast_ind = str_detect(as.character(co2_intermediate$Fuel),pattern = fast_gens[s])
+        co2_intermediate$speed[fast_ind] = "fast"
+    }
+
+    # for plotting co2 emissions by fuel type
+    co2emit_sum = co2_intermediate %>%
+      group_by(Fuel) %>%
+      summarise(co2mean = mean(co2tot),
+                co2min = min(co2tot),
+                co2max = max(co2tot))
+    co2emit_sum$run = xx[i]
+    
+    # for total plot
+    co2emit2 = co2emit %>%
       group_by(scenario) %>%
       summarise(allco2emit = sum(co2))
-    co2emit$run = xx[i]
+    co2emit2$run = xx[i]
     
     if(i==1){
-      allco2 = co2emit
+      allco2 = co2emit2
+      # allco2_bygen = co2emit_sum
+      allco2_byspd = co2_intermediate
     } else {
-      allco2 = rbind(allco2,co2emit)
+      allco2 = rbind(allco2,co2emit2)
+      # allco2_bygen = rbind(allco2_bygen,co2emit_sum)
+      allco2_byspd = rbind(allco2_byspd,co2_intermediate)
+    }
+
+   # make a plot of co2 emissions by fuel  type
+    if(plots){
+    ggplot(co2emit_sum,aes(x=Fuel,y=co2mean)) + 
+      theme(axis.text.x =  element_text(angle=90,hjust=1)) +
+      geom_errorbar(aes(ymin = co2min,  ymax = co2max), color = "grey") +
+      geom_point() + theme_minimal() +
+      geom_text(aes(label = round(co2mean,0)),size = 2,vjust=-1, angle = 15) +
+      labs(title  = paste("CO2 emissions  by generator type,",runIDs[i],"\n error bars give range across scenarios"),
+           y = "Tons CO2 emitted") +
+      ggsave(paste0(plot_fol,runIDs[i],"_",runDates[i],"co2_by_fueltype.png"),width = 8,height=6)
     }
   }
   
+  # for comparison with combined_summary file
+  co2_speed = allco2_byspd %>%
+    group_by(speed, run, scenario) %>% # lose the Fuel dimension
+    summarise(totco2 = sum(co2tot)) %>%
+    group_by(speed, run) %>%
+    summarise(co2mean = mean(totco2),
+              co2min = min(totco2),
+              co2max = max(totco2))
+  
   # plot
-  plot_fol =  paste0(folder,"plots/")
-  if(!dir.exists(plot_fol)){dir.create(plot_fol)}
+if(plots){
  ggplot(allco2,aes(x =  run, y = allco2emit)) + geom_boxplot() +
    theme_minimal()+
    theme(axis.text.x =  element_text(angle=90,hjust=1))+
-   ggsave(paste0(plot_fol,"all_co2_boxplot.png"),width = 12, height=9)
- return(allco2)
+   ggsave(paste0(plot_fol,saveas,".png"),width = 12, height=9)
+}
+ return(co2_speed)
 }
 # source("./consolidatedAnalysisFns.R")
 # plotallCO2(folder = "/home/groups/weyant/plevi_outputs/", searchString = "*_o25*keyDays2*")
+# co2_wide = pivot_wider(co2,names_from = "speed", values_from = c("co2mean","co2min","co2max"))
+#  write_csv(co2_wide, path = "/home/groups/weyant/plevi_outputs/co2_byspeed_wide_05-01.csv")
+
 
 ## Plot DR Production ####
 #TODO: add ability to plot multiple periods together

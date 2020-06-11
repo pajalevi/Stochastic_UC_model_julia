@@ -103,11 +103,11 @@ runIDs26 = substr(yy, 1, last_loc - 1)
 runDates26 = substr(yy, last_loc+1,100)
 
 #HYDRO AS SLOW GENERATOR RUNS
-# xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern = glob2rx("*_o25_*keyDays2*"))
-xx = c("advNot1_o25_keyDays2_2020-02-03", "advNot2_o25_keyDays2_2020-02-03",
-       "advNot3_o25_keyDays2_2020-02-03", "energy1_o25_keyDays2_2020-02-03",
-       "energy2_o25_keyDays2_2020-02-03", "energy3_o25_keyDays2_2020-02-03",
-       "noDR_o25_keyDays2_2020-02-03")
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern = glob2rx("*_o25_*keyDays2*"))
+# xx = c("advNot1_o25_keyDays2_2020-02-03", "advNot2_o25_keyDays2_2020-02-03",
+#        "advNot3_o25_keyDays2_2020-02-03", "energy1_o25_keyDays2_2020-02-03",
+#        "energy2_o25_keyDays2_2020-02-03", "energy3_o25_keyDays2_2020-02-03",
+#        "noDR_o25_keyDays2_2020-02-03")
 runIDs27 = substr(xx, 1, nchar(xx)-11)
 runDates27 = substr(xx, nchar(xx)-9,100)
 
