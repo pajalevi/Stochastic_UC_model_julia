@@ -155,7 +155,7 @@ plotDispatchAndValue = function(outputfol, desiredRuns,
   alldat$runtype =  substr(alldat$runlabel,1,end-1)
   alldat$runlevel = substr(alldat$runlabel,end,50)
   
-  # number of hours
+  ###### number of hours ####
   # all
   ggplot(filter(alldat,runtype != "start" & (dr_varcost == 35 | dr_varcost == 70 | dr_varcost == 10000)), aes(y =`Expected cost reduction from DR`, x = meannhours, color = runtype, shape = dr_varcost)) +
     geom_point() +
@@ -181,7 +181,7 @@ plotDispatchAndValue = function(outputfol, desiredRuns,
     ggsave(paste0(outputfol,"value_and_DR_dispatch_hours_costfacet.png"), width = 18, height = 5)
   
 
-  # event length
+  # event length ####
   # all
   ggplot(filter(alldat,runtype != "start" & (dr_varcost == 35 | dr_varcost == 70 | dr_varcost == 10000)), aes(y =`Expected cost reduction from DR`, x = meanlength, color = runtype, shape = dr_varcost)) +
     geom_point() +
@@ -205,7 +205,7 @@ plotDispatchAndValue = function(outputfol, desiredRuns,
     ggsave(paste0(outputfol,"value_and_DR_event_length_costfacet.png"), width = 18, height = 5)
   
   
-  # event number
+  # event number  ####
   # all
   ggplot(filter(alldat,runtype != "start" & (dr_varcost == 35 | dr_varcost == 70 | dr_varcost == 10000)), aes(y =`Expected cost reduction from DR`, x = meannevents, color = runtype, shape = dr_varcost)) +
     geom_point() +
@@ -229,13 +229,13 @@ plotDispatchAndValue = function(outputfol, desiredRuns,
     ggsave(paste0(outputfol,"value_and_DR_event_number_costfacet.png"), width = 18, height = 5)
   
   
-  # total energy
+  # total energy ####
   # all
   ggplot(filter(alldat,runtype != "start" & (dr_varcost == 35 | dr_varcost == 70 | dr_varcost == 10000)), aes(y =`Expected cost reduction from DR`, x = meanenergy, color = runtype, shape = dr_varcost)) +
     geom_point() +
     geom_text(aes(label = runlabel),size = 2,vjust = 0, hjust  = -0.2) +
-    geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`,width=.1, alpha = 0.2))+
-    geom_errorbarh(aes(y = `Expected cost reduction from DR`, xmin = minenergy, xmax = maxenergy, alpha = 0.2)) +
+    geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`,width=.1), alpha = 0.5)+
+    geom_errorbarh(aes(y = `Expected cost reduction from DR`, xmin = minenergy, xmax = maxenergy), alpha = 0.5) +
     theme_minimal() +
     labs(y="savings relative to noDR scenario", x = "Mean energy curtailed from DR (MW)",
          title = "DR value vs Energy curtailed by DR") +
@@ -245,8 +245,8 @@ plotDispatchAndValue = function(outputfol, desiredRuns,
     geom_point() +
     facet_wrap(~dr_varcost, scales = "free")+
     geom_text(aes(label = runlabel),size = 2,vjust = 0, hjust  = -0.2) +
-    geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`,width=.1, alpha = 0.2))+
-    geom_errorbarh(aes(y = `Expected cost reduction from DR`, xmin = minenergy, xmax = maxenergy, alpha = 0.2)) +
+    geom_errorbar(aes(ymin = `expected cost reduction lowbound`, ymax = `expected cost reduction hibound`,width=.1), alpha = 0.5)+
+    geom_errorbarh(aes(y = `Expected cost reduction from DR`, xmin = minenergy, xmax = maxenergy), alpha = 0.5) +
     theme_bw() +
     labs(y="savings relative to noDR scenario", x = "Mean energy curtailed from DR (MW)",
          title = "DR value vs Energy curtailed by DR") +
