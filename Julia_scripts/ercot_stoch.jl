@@ -89,10 +89,10 @@ laptop_params_fol = "Julia_UC_Github/Julia_scripts/"
 ## ERCOT DATASET
 ## DR is added to slow/fast categories depending on value of
 ## DRtype (in inputs csv)
-slow_gens = ["COAL","NUCLEAR","LANDFILL_GAS",
-            "BIOMASS","GAS","GAS_ST","GAS_CC"]
+# slow_gens = ["COAL","NUCLEAR","LANDFILL_GAS",
+            # "BIOMASS","GAS","GAS_ST","GAS_CC"]
             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
-fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND","HYDRO"]
+# fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND","HYDRO"]
 dr_gens = ["DR"]
 notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO",
             "LANDFILL_GAS","NUCLEAR","OIL","SOLAR","WIND"    ]
@@ -164,6 +164,7 @@ startlim = parse(Float64,inputs[1,:startlim])
 hourlim = parse(Float64,inputs[1,:hourlim])
 energylim = parse(Float64,inputs[1,:energylim])
 ramplims = parse(Float64,inputs[1,:ramplims])
+durationlim = parse(Float64, inputs[1,:durationlim])
 dr_override = parse(Bool,lowercase(inputs[1,:dr_override]))
 dr_varcost = parse(Float64,inputs[1,:dr_varcost])
 randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
@@ -268,15 +269,6 @@ dem_real = dem .* vdem
 # GENERATOR DATA
 # -------------------------------------------
 
-# adjust slow/fast defn based on DRtype
-if DRtype == 1
-    fast_gens = vcat(fast_gens, dr_gens)
-elseif (DRtype == 2) | (DRtype == 3)
-    slow_gens = vcat(slow_gens, dr_gens)
-else
-    error("DRtype must be 1, 2 or 3")
-end
-
 genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
@@ -293,8 +285,23 @@ genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="N
 # findin(x,set_interest)
 
 dr_ind = findin(genset[:Fuel],dr_gens)
-slow_ind = findin(genset[:Fuel],slow_gens)
-fast_ind = findin(genset[:Fuel],fast_gens)
+# slow_ind = findin(genset[:Fuel],slow_gens)
+slow_ind = findin(genset[:Speed],["SLOW"])
+# fast_ind = findin(genset[:Fuel],fast_gens)
+fast_ind = findin(genset[:Speed],["FAST"])
+
+# adjust slow/fast defn based on DRtype
+if DRtype == 1
+    # fast_gens = vcat(fast_gens, dr_gens)
+    fast_ind = vcat(fast_ind,dr_ind)
+elseif (DRtype == 2) | (DRtype == 3)
+    # slow_gens = vcat(slow_gens, dr_gens)
+    slow_ind = vcat(slow_ind,dr_ind)
+elseif DRtype == 0
+    println("No DR in this run")
+else
+    error("DRtype must be 0, 1, 2 or 3")
+end
 
 #generator min and max
 pmin = genset[:PMin]
@@ -340,7 +347,7 @@ for i in 1:length(names(wind_avail))
 end
 
 ### Demand Response
-if parse(inputs[1,:availID])!=0
+if parse(inputs[1,:availID])!=0 &  DRtype != 0
     dr_avail = CSV.read(string(default_data_fol,inputs[1,:availID],".csv"))
     # remove first col
     dr_avail = dr_avail[:,2:ncol(dr_avail)]
@@ -348,7 +355,11 @@ if parse(inputs[1,:availID])!=0
     for i in 1:length(names(dr_avail))
         col = names(dr_avail)[i]
         ind = findin(genset[:plantUnique],[convert(String, col)])
-        pf[ind,:] = dr_avail[hours,i]
+        if length(ind) > 0
+            pf[ind,:] = dr_avail[hours,i]
+        else
+            error("No corresponding DR unit found for ", names(dr_avail)[i])
+        end
     end
 end
 
@@ -521,6 +532,22 @@ if energylim != 0
         sum(p[GDR[g],t,o] for t = TIME) <= energylim)
 end
 
+#DURATIONLIM
+# number of hours in a row that DR can be committed
+if durationlim != 0
+    # make a list of lists of 24-h timestep groupings
+    l = Int(durationlim + 2)
+    s = 1
+    WINDOWS = [TIME[i:i+l-1] for i in range(1,s,Int(length(TIME)-l+1))]
+    for i in range(1,s,Int(length(TIME)-l+1))
+        print(TIME[i:i+l-1])
+    end
+    for W in WINDOWS
+        @constraint(m,[g = 1:n_gdr, o = SCENARIOS],
+            sum(u[GDR[g],t,o] for t = W) <= durationlim)
+    end
+end
+
 ### OBJECTIVE ###
 # @objective(m, Max, 5x + 3*y )
 @objective(m, Min, sum(pro[o] *
@@ -571,10 +598,12 @@ writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
 # print("production of DR:")
 y = getvalue(p[GDR,:,:])
 
-y_out = convert3dto2d(y,1, 3,  2,
-    vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-     genset[dr_ind,:plantUnique])
-writecsvmulti(y_out,output_fol,"DR_production",multiTF,periodsave)
+if DRtype != 0
+    y_out = convert3dto2d(y,1, 3,  2,
+        vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
+         genset[dr_ind,:plantUnique])
+    writecsvmulti(y_out,output_fol,"DR_production",multiTF,periodsave)
+end
 
 # display(y)
 # print("production of slow generators:")
