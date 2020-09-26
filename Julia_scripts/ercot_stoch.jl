@@ -536,7 +536,7 @@ end
 # number of hours in a row that DR can be committed
 if durationlim != 0
     # make a list of lists of 24-h timestep groupings
-    l = Int(durationlim + 2)
+    l = Int(durationlim + 1)
     s = 1
     WINDOWS = [TIME[i:i+l-1] for i in range(1,s,Int(length(TIME)-l+1))]
     for i in range(1,s,Int(length(TIME)-l+1))

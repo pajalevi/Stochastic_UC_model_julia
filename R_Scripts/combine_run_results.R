@@ -18,7 +18,7 @@ SHRLK = TRUE
 ## FILE STRUCTURE ##
 if(SHRLK){
   baseFol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  outputFolBase = "/home/groups/weyant/plevi_outputs/"
+  outputFolBase = "/home/groups/weyant/plevi_outputs/"#slowgas/"
   inputFol = "inputs/"
 } else{
   baseFol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/"

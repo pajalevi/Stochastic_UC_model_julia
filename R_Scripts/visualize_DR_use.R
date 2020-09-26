@@ -16,7 +16,7 @@ SHRLK = TRUE
 ## FILE STRUCTURE ##
 if(SHRLK){
   base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-  output_fol_base  = "/home/groups/weyant/plevi_outputs/"
+  output_fol_base  = "/home/groups/weyant/plevi_outputs/"#slowgas/"
   # output_fol_base = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
   input_fol = "inputs/"
 } else{
@@ -173,9 +173,28 @@ xx = c("advNot1_o25_c3_keyDays2_2020-04-01","advNot1_o25_c4_keyDays2_2020-04-01"
 runIDs30 = substr(xx, 1, nchar(xx)-11)
 runDates30 = substr(xx, nchar(xx)-9,100)
 
+xx = c("dur1_o25_keyDays2_2020-07-20","dur2_o25_keyDays2_2020-07-20","dur3_o25_keyDays2_2020-07-20")
+runIDs31 = substr(xx, 1, nchar(xx)-11)
+runDates31 = substr(xx, nchar(xx)-9,100)
 
-runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+xx = c("noDR_o25_keyDays2_2020-07-20")
+runIDs32 = substr(xx, 1, nchar(xx)-11)
+runDates32 = substr(xx, nchar(xx)-9,100)
+
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("dur*"))
+runIDs33 = substr(xx, 1, nchar(xx)-11)
+runDates33 = substr(xx, nchar(xx)-9,100)
+
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/slowgas/", pattern = glob2rx("*_o25_*keyDays2*"))
+runIDs34 = substr(xx, 1, nchar(xx)-11)
+runDates34 = substr(xx, nchar(xx)-9,100)
+
+xx = c("dur4_o25_keyDays2_2020-07-20")
+runIDs35 = substr(xx, 1, nchar(xx)-11)
+runDates35 = substr(xx, nchar(xx)-9,100)
+
+runIDs = c(runIDs33)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates33)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 

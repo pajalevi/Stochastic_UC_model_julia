@@ -37,7 +37,7 @@ supplycurve = merge(demand, medprice, by="Date")
 
 dataout = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/"
 # gendat = read.csv(file = paste0(dataout,"unformatted data/all_cols_complete_generator_listing_ERCOT_012019.csv"))
-gendat = read.csv(file = paste0(dataout,"julia_input/ercot_default/complete_generator_correctedGas_3-12-19_alldata.csv"))
+gendat = read.csv(file = paste0(dataout,"julia_input/ercot_default/complete_generator_correctedGas_Start_Ramp_noDR_07-20-20.csv"))
 plotsfol = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/plots/ERCOT_data/"
 # plot cumulative supply ####
 # REMOVE DR

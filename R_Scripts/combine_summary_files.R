@@ -1,11 +1,11 @@
 # combine_summary_files.csv
 
 # load model data
+library(plyr) #for rbind.fill
 library(tidyverse)
 library(data.table)
 source("./getModelParams.R")
 # library(stringr)
-library(plyr) #for rbind.fill
 
 SHRLK = TRUE
 
@@ -111,6 +111,10 @@ xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern 
 runIDs27 = substr(xx, 1, nchar(xx)-11)
 runDates27 = substr(xx, nchar(xx)-9,100)
 
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/slowgas/", pattern = glob2rx("*_o25_*keyDays2*"))
+runIDs34 = substr(xx, 1, nchar(xx)-11)
+runDates34 = substr(xx, nchar(xx)-9,100)
+
 runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
 runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
@@ -118,10 +122,10 @@ inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 
 # iterate through all summary files and combine them ####
 combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scratch/users/pjlevi/julia_outputs/INFORMS/"){
-  library(plyr) #for rbind.fill
+  # library(plyr) #for rbind.fill
   if(SHRLK){
     base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-    output_fol_base  = "/home/groups/weyant/plevi_outputs/"
+    output_fol_base  = "/home/groups/weyant/plevi_outputs/"#slowgas/"
     # output_fol_base = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
     input_fol = "inputs/"
     inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")
@@ -174,7 +178,7 @@ combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scrat
       # names(newoutputs) = c("runID",names(params),names(summary2))
       newoutputs = cbind(runIDs[i],summary2) 
       names(newoutputs) = c("runID",names(summary2))
-      alloutputs = rbind.fill(alloutputs,newoutputs)#bind_rows(alloutputs,newoutputs)
+      alloutputs = plyr::rbind.fill(alloutputs,newoutputs)#bind_rows(alloutputs,newoutputs)
        
     }
     

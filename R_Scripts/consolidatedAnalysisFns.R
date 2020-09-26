@@ -527,22 +527,29 @@ plotDRUse = function(runID,runDate,drcommit,
     print(paste("endtrim set to", endtrim))
   }
   
-  ##
+  ## load drdat
+  drdatfile = paste0(output_fol,outputfolID,"_dralldata.csv")
+ 
+  if(file.exists(drdatfile)){
+    drdat = read_csv(drdatfile)
+  } else if(!str_detect(outputfolID,"noDR")) {
+    drdat = getDRAllData(runID, runDate, output_fol_base = output_fol, savecsv = TRUE)
+  } else {
+    # this is a noDR file
+    return()
+  }
   
   # load DR production
-  drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID, endtrim)
+  # drprod = loadTimeseriesData(output_fol,"DR_production",overlaplength,2, probabilities=F,instance_in_fol,params$nrandp,dist_ID = params$stochID, endtrim)
+  # drprod = drdat %>% select(t,scenario,nperiod,GEN_IND,value.prod,scenarionum) %>% rename(value = value.prod)
+  # drcommit = #TODO
   
-  # ggplot(drprod, aes(x=t,y=value)) + facet_wrap(~scenario) + geom_point()
-  # ggplot(filter(drprod,nperiod=="10"), aes(x=t,y=value)) + facet_wrap(~scenario) + 
-  #   geom_line() +
-  #   ggtitle(paste(runID, "Period 10 DR production"))#+ 
-  # coord_cartesian(xlim=c(5000,6000))
-  
-  # load and set up demand #
+  # ID key stats about the period we are asked to graph
   periodinfo = strsplit(period,"p|_")[[1]] 
   numperiod=as.numeric(periodinfo[2])
   firstperiod = as.numeric(periodinfo[3])
   lastperiod = as.numeric(periodinfo[4])
+  # load and set up demand #
   dem_base = read_csv(paste0(base_fol,model_input_fol,"ercot_default/ercot_demand_2016.csv"))
   demchange = read_csv(paste0(instance_in_fol,"demandScenarios_vdem_ARMA26.0_",nscen,"_",period,".csv")) 
   demrealo1 = dem_base$demand[firstperiod:lastperiod] * demchange$V1
@@ -553,43 +560,43 @@ plotDRUse = function(runID,runDate,drcommit,
   demreal$scenarionum = substr(demreal$scenario,2,4)
   
   # select demand from just one period #
-  drprodoneperiod = filter(drprod,nperiod == numperiod)
-  drprodoneperiod$scenarionum = substr(drprodoneperiod$scenario,2,4)
-  demprod = merge(demreal,drprodoneperiod,by=c("t","scenarionum")) 
+  droneperiod = filter(drdat,nperiod == numperiod)
+  # droneperiod$scenarionum = substr(droneperiod$scenario,2,4)
+  alldat = merge(demreal,droneperiod,by=c("t","scenarionum")) 
   
   # plot demand and DR production
-  ggplot(filter(demprod,scenarionum %in% scenarios))+ 
+  ggplot(filter(alldat,scenarionum %in% scenarios))+ 
     facet_wrap(~scenario.x) + 
-    geom_line(aes(x=t-min(t), y=(value*10)+30000), color="blue")+
+    geom_line(aes(x=t-min(t), y=(value.prod*10)+30000), color="blue")+
     geom_line(aes(x=t-min(t),y=demand)) +
     # scale_color_gradient(low="black",high="red")+
     ggtitle(paste(runIDs[r], "Period ",numperiod," demand and DR Production")) +
     ggsave(paste0(plot_fol,runIDs[r],"_",period,"_demand_DRproduction.png"),width = 10, height=7)
   
   # plot dr commitment
-  drcomtoneperiod = filter(drcommit, nperiod == numperiod)
-  drcomtoneperiod$scenarionum = substr(drcomtoneperiod$scenario,2,4)
-  demcomt = merge(demreal, drcomtoneperiod, by=c("t","scenarionum"))
+  # drcomtoneperiod = filter(drcommit, nperiod == numperiod)
+  # drcomtoneperiod$scenarionum = substr(drcomtoneperiod$scenario,2,4)
+  # demcomt = merge(demreal, drcomtoneperiod, by=c("t","scenarionum"))
   # print(names(demcomt))
   # print(head(demcomt))
   
-  ggplot(filter(demcomt,scenarionum %in% scenarios))+ 
+  ggplot(filter(alldat,scenarionum %in% scenarios))+ 
     facet_wrap(~scenario.x) + 
-    geom_line(aes(x=t-min(t), y=(value*10000)+30000), color="blue")+
+    geom_line(aes(x=t-min(t), y=(value.commit*10000)+30000), color="blue")+
     geom_line(aes(x=t-min(t),y=demand)) +
     # scale_color_gradient(low="black",high="red")+
     ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR Commitment"))) +
     ggsave(paste0(plot_fol,runIDs[r],"_",period,"_demand_DRcommitment.png"),width = 10, height=7)
   
   # plot both together
-  demprod = rename(demprod, production = value)
-  drcomtoneperiod = rename(drcomtoneperiod, commitment = value)
-  dralldata = merge(drcomtoneperiod, demprod, by=c("t","scenarionum"))
+  # demprod = rename(demprod, production = value)
+  # drcomtoneperiod = rename(drcomtoneperiod, commitment = value)
+  # dralldata = merge(drcomtoneperiod, demprod, by=c("t","scenarionum"))
   # print(names(dralldata))
-  ggplot(filter(dralldata,scenarionum %in% scenarios))+ 
+  ggplot(filter(alldat,scenarionum %in% scenarios))+ 
     facet_wrap(~scenario.x) + 
-    geom_line(aes(x=t-min(t), y=(production*10)+30000), color="blue")+
-    geom_point(aes(x=t-min(t), y=(production*10)+30000, color = commitment), shape=1, size = 0.5) + 
+    geom_line(aes(x=t-min(t), y=(value.prod*10)+30000), color="blue")+
+    geom_point(aes(x=t-min(t), y=(value.prod*10)+30000, color = value.commit), shape=1, size = 0.5) + 
     geom_line(aes(x=t-min(t),y=demand)) +
     scale_color_gradient(low="black",high="red")+
     ggtitle(paste(runIDs[r], paste("Period",numperiod,"demand and DR production with commitment in red"))) +
@@ -597,12 +604,12 @@ plotDRUse = function(runID,runDate,drcommit,
   
   
   ### Summarise all scenarios togetether ###
-  scenmean = dralldata %>%
+  scenmean = alldat %>%#dralldata %>%
     group_by(t) %>%
-    summarise(p_commit = mean(commitment),
-              mean_prod = mean(production),
-              max_prod = max(production),
-              min_prod = min(production))
+    dplyr::summarise(p_commit = mean(value.commit),
+              mean_prod = mean(value.prod),
+              max_prod = max(value.prod),
+              min_prod = min(value.prod))
   # add demand back in
   scenmean = merge(scenmean, demrealwide, by="t")
   demreal$scenarionum  = as.factor(demreal$scenarionum)
