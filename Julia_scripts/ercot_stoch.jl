@@ -1,4 +1,4 @@
- # full_universe_stoch.jl
+# ercot_stoch.jl
 # solves the full universe version of a stochastic two stage
 # unit-commitment model in which slow generators are committed in the
 # first stage and fast generators can be committed in real time.
@@ -8,8 +8,7 @@
 # The availability of DR can be restricted by the last four command line args
 
 # cmd line format should be:
-# include("full_universe_stoch.jl") <date> <inputs_file_name> <multi-runTF> <period_name>
-#
+# include("ercot_stoch.jl") <date> <inputs_file_name> <multi-runTF> <period_name>
 # last four are "0" if switch is not used
 
 # Written under Julia 0.6.4
@@ -17,44 +16,17 @@
 # pjlevi@stanford.edu
 # NOV 2018
 
-# TODO --------------------------------------
-# TRIPLECHECK UNITS - MW VS GW
-# X change filepath for output writing
-# X ----- change file structure in sherlock to match below
-# X ----- file structure: home folder(outputs(output ID), inputs(base, timeseriesID))
-# X better file org for scenario input files
-# X check if output folder exists before creating it
-# X set up tests for runtime on sherlock (different # time periods, omegas)
-# think about benders, binary relaxation, how to reduce problem size
-# develop better way to differentiate between slow and fast generators
-#       papavasiliou denotes any generator <300 MW(?) as fast, all others slow
-# look at output to sanity check.
-#       graph output levels along with demand levels
-#       look at marginal prices over time (cannot just look at shadow price
-#            because the binary problem means theres no useful dual variable.
-#            Instead I can look at the max price of dispatched generators at
-#            each timestep)
-# X make sherlock = true an argument that can be passed in when calling file
-# X make debug switch that can be used to run everything up to model solve
-# 'keep' does not seem to work for Julia 1.0
-# upgrade code to Julia 0.7 (which has depracation warnings for 1.0)
-# X upload newest version with submission scripts to sherlock
-# save workspace to output folder using JLD2
-# save probabilities and characteristics of new scenarios in output folder
-# -------------------------------------------
 ### Packages ###
 using JuMP
-#using Clp
 using Gurobi
 using DataFrames
 using CSV
-using JLD2
+# using JLD2
 include("convert3dto2d.jl")
 include("make_scenarios.jl")
 include("writecsvmulti.jl")
 
 test = Gurobi.Env() # test that gurobi is working
-
 
 # -------------------------------------------
 # USER CONTROLS & CMD LINE ARGS ##########
@@ -73,26 +45,6 @@ laptop_input_file = "Data/julia_input/"
 laptop_output_file = "Data/julia_output/"
 laptop_params_fol = "Julia_UC_Github/Julia_scripts/"
 
-## VIRGINIA DATASET
-# slow_gens = ["HYDRO",
-#             "COAL","NUCLEAR","DR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
-#             "BIOMASS","GAS","GAS_CC",
-#             "IMPORT_COAL","IMPORT_GAS"]
-#             # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
-# fast_gens = ["GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
-# dr_gens = ["DR"]
-# notdr_gens = ["COAL","NUCLEAR", "MUNICIPAL_SOLID_WASTE","LANDFILL_GAS",
-#             "BIOMASS","GAS","GAS_CC",
-#             "IMPORT_COAL","IMPORT_GAS",
-#             "HYDRO","GAS_CT","OIL","SOLAR","WIND","IMPORT_HYDRO"]
-
-## ERCOT DATASET
-## DR is added to slow/fast categories depending on value of
-## DRtype (in inputs csv)
-# slow_gens = ["COAL","NUCLEAR","LANDFILL_GAS",
-            # "BIOMASS","GAS","GAS_ST","GAS_CC"]
-            # NB: if DR is changed to a fast gen, constraint on hourlim and startlim needs to be changed
-# fast_gens = ["GAS_CT","GAS_ICE","OIL","SOLAR","WIND","HYDRO"]
 dr_gens = ["DR"]
 notdr_gens = ["BIOMASS","COAL","GAS","GAS_CC","GAS_CT","GAS_ICE","GAS_ST","HYDRO",
             "LANDFILL_GAS","NUCLEAR","OIL","SOLAR","WIND"    ]
@@ -197,8 +149,6 @@ end
 # --------------------------------------------------------------------------------------
 ### TIME PERIOD DATA
 # -------------------------------------------
-# first_periods = CSV.read(string(subsel_data_fol,"first_periods_",inputs[1,:timeseriesID],".csv"),datarow=1)[1]
-# notfirst_periods = CSV.read(string(subsel_data_fol,"notfirst_periods_",inputs[1,:timeseriesID],".csv"),datarow=1)[1]
 if multiTF
     hours = CSV.read(string(subsel_data_fol,periodID),datarow=1,types=[Int])[1]
 else
@@ -215,19 +165,10 @@ dem2 = CSV.read(string(default_data_fol, inputs[1,:demandFile]),datarow=2,missin
 # subselect for just the rows corresponding to 'hours'
 dem = dem2[hours,2]
 
-# check that t_firsts fall on multiples of 24+1
-# ie that each period encompasses entire days
-# because this simplifies computation later on
-# for i in 1:length(t_firsts)
-#     if rem(t_firsts[i],24) != 1
-#         error(string("period ",i," does not begin at the beginning of a day"))
-#     end
-# end
-# this gets messed up by daylight savings time
-
 # --------------------------------------------------------------------------------------
 # STOCHASTIC VARIABLE DATA
 # -------------------------------------------
+# Test data:
 # vdr = [0.9,1,1.1]
 # pro = [0.25,0.5,0.25]
 # probs = CSV.read(string(default_data_fol , "dist_input_",stochID,".csv"))
@@ -252,6 +193,7 @@ else
     pro = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_prob","_",inputs[1,:stochID],"_",periodsave,".csv")))
 end
 
+# testing:
 # if sum(pro) != 1
     # error("sum of probabilities is not one, it is ", sum(pro))
 # end
@@ -262,7 +204,7 @@ n_omega = length(pro) #redefine for new number of scenarios
 # writecsv("vdr_test.csv",vdr)
 # writecsv("p_test.csv",pro')
 
-# Set up demand realizations matrix dem_real[t,o] #
+# Set up demand realizations matrix dem_real[t,o]
 dem_real = dem .* vdem
 
 # --------------------------------------------------------------------------------------
@@ -270,6 +212,8 @@ dem_real = dem .* vdem
 # -------------------------------------------
 
 genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
+
+# Tips for manipulating genset data:
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
 # names(genset) # this is how to get the column names
 # anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
@@ -285,17 +229,13 @@ genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="N
 # findin(x,set_interest)
 
 dr_ind = findin(genset[:Fuel],dr_gens)
-# slow_ind = findin(genset[:Fuel],slow_gens)
 slow_ind = findin(genset[:Speed],["SLOW"])
-# fast_ind = findin(genset[:Fuel],fast_gens)
 fast_ind = findin(genset[:Speed],["FAST"])
 
 # adjust slow/fast defn based on DRtype
 if DRtype == 1
-    # fast_gens = vcat(fast_gens, dr_gens)
     fast_ind = vcat(fast_ind,dr_ind)
 elseif (DRtype == 2) | (DRtype == 3)
-    # slow_gens = vcat(slow_gens, dr_gens)
     slow_ind = vcat(slow_ind,dr_ind)
 elseif DRtype == 0
     println("No DR in this run")
@@ -426,7 +366,6 @@ end
 
 # -----------------------------------------------------------------------------------------------------
 ### CONSTRAINTS ###
-# @constraint(m, 1x + 5y <= 3.0 )
 
 #SUPPLY-DEMAND
 @constraint(m,supplydemand[t=1:n_t, o=1:n_omega],
@@ -451,13 +390,9 @@ if DRtype == 3
 end
 
 #START_S
-# @constraint(m,[g = 1:n_gsl, t=1:(n_t-1)],
-    # z[g,t+1] == w[g,t+1] - w[g,t])
 @constraint(m,[g = 1:n_gsl, t=t_notfirst],
     z[g,t] == w[g,t] - w[g,t-1])
 #START_F
-# @constraint(m,[g=GENERATORS ,t=1:(n_t-1), o = SCENARIOS],
-#     v[g,t+1,o] == u[g,t+1,o] - u[g,t,o])
 @constraint(m,[g=GENERATORS ,t=t_notfirst, o = SCENARIOS],
     v[g,t,o] == u[g,t,o] - u[g,t-1,o])
 #INIT_S
@@ -572,9 +507,6 @@ if !isdir(output_fol)
 end
 
 ## save a copy of inputs & demand scenarios to the output file
-# inputscsv = DataFrame(hcat(ARGNAMES[1,:],localARGS))
-# inputscsv = DataFrame(input_type = ARGNAMES[1,:], value = localARGS)
-# CSV.write(string(output_fol,"run_inputs.csv"), inputscsv)
 writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
 
 # --------------------------------------------------------------------------------------
@@ -632,15 +564,6 @@ w_out = getvalue(w)
 wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
 writecsvmulti(wdf,output_fol,"slow_commitment",multiTF,periodsave)
-
-# Redundant with startup of all generators --
-# print("startup of slow generators:")
-# z_out = getvalue(z)
-# zdf = DataFrame(transpose(z_out))
-# names!(zdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
-# writecsvmulti(zdf,output_fol,"slow_startup",multiTF,periodsave)
-
-# display(getvalue(z))
 
 # print("commitment of all generators")
 # display(getvalue(u))
@@ -715,47 +638,3 @@ if !trueBinaryStartup
         writecsvmulti(type3dr_sf[saveind,:],output_fol,"type3dr_shadow",multiTF,periodsave)
     end
 end
-
-### ramplim ###
-# rampl_shadow = getdual(ramplim)
-# rampl_sf = convert3dto2d(rampl_shadow,1, 3,  2,
-#     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
-#      genset[:,:plantUnique])
-# # only save rows where there is a nonzero shadow price
-# shadowsum = sum(convert(Array{Float64},rampl_sf[:,1:n_omega]),2)
-# saveind = find(shadowsum .!= 0)
-# writecsvmulti(rampl_sf[saveind,:],output_fol,"ramplimit_shadow",multiTF,periodsave)
-#
-# ### limstart ###
-# if startlim !=0
-#     limstart_shadow = getdual(limstart)
-#     limstart_sf = convert3dto2d(limstart_shadow,1, 3,  2,
-#         vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-#          genset[dr_ind,:plantUnique])
-#     # only save rows where there is a nonzero shadow price
-#     shadowsum = sum(convert(Array{Float64},limstart_sf[:,1:n_omega]),2)
-#     saveind = find(shadowsum .!= 0)
-#     writecsvmulti(limstart_sf[saveind,:],output_fol,"startlimit_shadow",multiTF,periodsave)
-# end
-# ### limhrs ###
-# if hourlim != 0
-#     limhrs_shadow = getdual(limhrs)
-#     limhrs_sf = convert3dto2d(limhrs_shadow,1, 3,  2,
-#         vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-#          genset[dr_ind,:plantUnique])
-#     # only save rows where there is a nonzero shadow price
-#     shadowsum = sum(convert(Array{Float64},limhrs_sf[:,1:n_omega]),2)
-#     saveind = find(shadowsum .!= 0)
-#     writecsvmulti(limhrs_sf[saveind,:],output_fol,"hourlimit_shadow",multiTF,periodsave)
-# end
-# ### limenergy ###
-# if energylim !=0
-#     limenergy_shadow = getdual(limenergy)
-#     limenergy_sf = convert3dto2d(limenergy_shadow,1, 3,  2,
-#         vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
-#          genset[dr_ind,:plantUnique])
-#     # only save rows where there is a nonzero shadow price
-#     shadowsum = sum(convert(Array{Float64},limenergy_sf[:,1:n_omega]),2)
-#     saveind = find(shadowsum .!= 0)
-#     writecsvmulti(limenergy_sf[saveind,:],output_fol,"energylimit_shadow",multiTF,periodsave)
-# end
