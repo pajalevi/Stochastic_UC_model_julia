@@ -127,7 +127,7 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 # PARSE CMD LINE ARGS #
 ARGNAMES = ["date" ,"inputs_file_name","input_verion" ,"multi-runTF", "period_name" ]
-defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_rand.csv","rand_u20pp","true","periods_1_468_588.csv"]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","rand_00pp","true","periods_1_468_588.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
@@ -168,6 +168,7 @@ startlim = parse(Float64,inputs[1,:startlim])
 hourlim = parse(Float64,inputs[1,:hourlim])
 energylim = parse(Float64,inputs[1,:energylim])
 ramplims = parse(Float64,inputs[1,:ramplims])
+durationlim = parse(Float64, inputs[1,:durationlim])
 dr_override = parse(Bool,lowercase(inputs[1,:dr_override]))
 dr_varcost = parse(Float64,inputs[1,:dr_varcost])
 randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
@@ -305,6 +306,15 @@ dem_real = dem .* vnd
 # GENERATOR DATA
 # -------------------------------------------
 
+genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
+# genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
+# names(genset) # this is how to get the column names
+# anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
+
+dr_ind = findin(genset[:Fuel],dr_gens)
+slow_ind = findin(genset[:Speed],["SLOW"])
+fast_ind = findin(genset[:Speed],["FAST"])
+
 # adjust slow/fast defn based on DRtype
 if DRtype == 1
     fast_gens = vcat(fast_gens, dr_gens)
@@ -313,11 +323,6 @@ elseif (DRtype == 2) | (DRtype == 3)
 else
     error("DRtype must be 1, 2 or 3")
 end
-
-genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
-# genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
-# names(genset) # this is how to get the column names
-# anscombe[:,[:X3, :Y1]]  #how to grab several columns by colname
 
 # how do I select which rows match one of a set of strings?
 # in("c",["a","b","c"]) # ask if "c" is contained in set of interest
@@ -329,9 +334,9 @@ genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="N
 # set_interest = ["c"]# for this to work must have the []
 # findin(x,set_interest)
 
-dr_ind = findin(genset[:Fuel],dr_gens)
-slow_ind = findin(genset[:Fuel],slow_gens)
-fast_ind = findin(genset[:Fuel],fast_gens)
+# dr_ind = findin(genset[:Fuel],dr_gens)
+# slow_ind = findin(genset[:Fuel],slow_gens)
+# fast_ind = findin(genset[:Fuel],fast_gens)
 
 #generator min and max
 pmin = genset[:PMin]
@@ -385,7 +390,11 @@ if parse(inputs[1,:availID])!=0
     for i in 1:length(names(dr_avail))
         col = names(dr_avail)[i]
         ind = findin(genset[:plantUnique],[convert(String, col)])
-        pf[ind,:] = dr_avail[hours,i]
+        if length(ind) > 0
+            pf[ind,:] = dr_avail[hours,i]
+        else
+            error("No corresponding DR unit found for ", names(dr_avail)[i])
+        end
     end
 end
 
@@ -564,6 +573,22 @@ if energylim != 0
     # per period
     @constraint(m,limenergy[g = 1:n_gdr, o=SCENARIOS],
         sum(p[GDR[g],t,o] for t = TIME) <= energylim)
+end
+
+#DURATIONLIM
+# number of hours in a row that DR can be committed
+if durationlim != 0
+    # make a list of lists of 24-h timestep groupings
+    l = Int(durationlim + 1)
+    s = 1
+    WINDOWS = [TIME[i:i+l-1] for i in range(1,s,Int(length(TIME)-l+1))]
+    for i in range(1,s,Int(length(TIME)-l+1))
+        print(TIME[i:i+l-1])
+    end
+    for W in WINDOWS
+        @constraint(m,[g = 1:n_gdr, o = SCENARIOS],
+            sum(u[GDR[g],t,o] for t = W) <= durationlim)
+    end
 end
 
 ### OBJECTIVE ###
