@@ -127,7 +127,7 @@ default_data_fol = string(input_fol,"ercot_default/")
 
 # PARSE CMD LINE ARGS #
 ARGNAMES = ["date" ,"inputs_file_name","input_verion" ,"multi-runTF", "period_name" ]
-defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","rand_00pp","true","periods_1_468_588.csv"]
+defaultARGS = [Dates.format(Dates.now(),"Y-m-d"),"inputs_ercot.csv","rand_o25_00pp_keyDays2","true","periods_1_468_588.csv"]
 localARGS = length(ARGS) > 0 ? ARGS : defaultARGS #if ARGS supplied, use those. otherwise, use default
 nargs = length(localARGS)
 @show localARGS
@@ -175,10 +175,8 @@ randScenarioSel = parse(Bool,lowercase(inputs[1,:randScenarioSel]))
 trueBinaryStartup = parse(Bool,lowercase(inputs[1,:trueBinaryStartup]))
 DRtype = parse(Int64,inputs[1,:DRtype])
 DRrand = parse(Bool,lowercase(inputs[1,:DRrand]))
-dr_nrand_o = parse(Int64,inputs[1,:dr_nrand_o])
 nd_nrand_o = parse(Int64,inputs[1,:nd_nrand_o])
 int_length = parse(Int64,inputs[1,:intlength])
-dr_int_length = parse(Int64,inputs[1,:dr_int_length])
 debug = !parse(Bool, lowercase(inputs[1,:solve_model]))
 MIPFocusParam = parse(Int64,inputs[1,:MIPFocusParam])
 MIPGapParam = parse(Float64,inputs[1,:MIPGapParam])
@@ -263,6 +261,9 @@ end
 
 ## DR Response uncertainty ##
 if !isfile(string(subsel_data_fol,"drResponseScenarios_vdr","_",inputs[1,:DRrand_ID],"_",periodsave,".csv"))
+    dr_int_length = parse(Int64,inputs[1,:dr_int_length])
+    dr_nrand_o = parse(Int64,inputs[1,:dr_nrand_o])
+
     drprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:DRrand_ID],"_dr.csv"))
     drv_in = convert(Array,drprobs[2,:]) # converts the first row of probs to an Array
     drpro_in = rationalize.(convert(Array,drprobs[1,:])) #to avoid rounding issues later
@@ -288,7 +289,8 @@ vnd = scenario_info[2];
 pro = scenario_info[3];
 writecsvmulti(DataFrame(vdr),subsel_data_fol,string("vdr","_",inputs[1,:DRrand_ID]),multiTF,periodsave)
 writecsvmulti(DataFrame(vnd),subsel_data_fol,string("vnd","_",inputs[1,:DRrand_ID]),multiTF,periodsave)
-writecsvmulti(DataFrame(pro),subsel_data_fol,string("pro","_",inputs[1,:DRrand_ID]),multiTF,periodsave)
+writecsvmulti(DataFrame(pro),subsel_data_fol,string("pro","_",inputs[1,:DRrand_ID]),multiTF,periodsave) ## WARNING: passing columns argument with non-AbstractVector entries is deprecated
+
 
 
 println("sum of probabilities is ", sum(pro))
@@ -318,8 +320,10 @@ fast_ind = findin(genset[:Speed],["FAST"])
 # adjust slow/fast defn based on DRtype
 if DRtype == 1
     fast_gens = vcat(fast_gens, dr_gens)
+    fast_ind = vcat(fast_ind_, dr_ind)
 elseif (DRtype == 2) | (DRtype == 3)
     slow_gens = vcat(slow_gens, dr_gens)
+    slow_ind = vcat(slow_ind, dr_ind)
 else
     error("DRtype must be 1, 2 or 3")
 end

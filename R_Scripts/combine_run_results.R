@@ -31,6 +31,7 @@ if(SHRLK){
 source(paste0(baseFol,"/code/R_Scripts/mergeTimeseriesData.R")) # contains loadTimeseriesData
 source(paste0(baseFol,"/code/R_Scripts/consolidatedAnalysisFns.R")) # genBreakdown()
 source(paste0(baseFol,"/code/R_Scripts/getModelParams.R"))
+source(paste0(baseFol,"/code/R_Scripts/getProbs.R"))
 
 
 ### PARAMS ####----##
@@ -179,14 +180,28 @@ combineRunResults <- function(runID, runDate, graphs = T,
     prod = rbind(slowprod, fastprod)
     names(prod)[names(prod) == 'value'] <- 'MWout'
     rm(fastprod, slowprod)
+    # prod header: "","GEN_IND","t","nperiod","scenario","MWout","speed","prob"
+    
     # write_csv(prod, paste0(output_fol,"prod.csv")) # cannot turn off scientific notation in write_csv
-    prod$prob = 1/params$nrandp
+    # prod$prob = 1/params$nrandp
+    # getProbs = function(params,inputsfol,nscenarios)
+    allprobs = getProbs(params, instance_in_fol, length(unique(prod$scenario)))
+    prod = merge(as.data.table(prod), as.data.table(allprobs), by.x = c("scenario","nperiod"), by.y = c("scenarionum","periodnum"), all.x=T)
     
     write.csv(prod, paste0(output_fol,"prod.csv"))
   } else {
     print("Loading prod.csv")
     prod = read_csv(file = paste0(output_fol,"prod.csv"))
-    prod$prob = 1/params$nrandp
+    # prod$prob = 1/params$nrandp
+    # getProbs = function(params,inputsfol,nscenarios)
+    #TODO: first test if prob is a column in prod
+    # probably already has prob but its' wrong! so, remove prob
+    prod = select(prod, -prob)
+    print("starting getProbs")
+    allprobs = getProbs(params, instance_in_fol, length(unique(prod$scenario)))
+    print("finishing getProbs")
+    print(allprobs)
+    prod = merge(as.data.table(prod), as.data.table(allprobs), by.x = c("scenario","nperiod"), by.y = c("scenarionum","periodnum"), all.x=T)
     slowgens = read_csv(file = paste0(output_fol,"slow_gens.csv"))
     slowgens = slowgens$x
     print(head(slowgens))
@@ -371,14 +386,24 @@ combineRunResults <- function(runID, runDate, graphs = T,
     print("Loading startup data")
     allstartup = loadTimeseriesData(output_fol,"v_startup",overlaplength,
                                     2,instance_in_fol,params$nrandp,dist_ID = params$stochID, probabilities = F, endtrim=endtrim)
-    allstartup$prob=1/params$nrandp
+    # allstartup$prob=1/params$nrandp
+    # getProbs = function(params,inputsfol,nscenarios)
+    allprobs = getProbs(params, instance_in_fol, length(unique(prod$scenario)))
+    allstartup = merge(as.data.table(allstartup), as.data.table(allprobs), by.x = c("scenario","nperiod"), by.y = c("scenarionum","periodnum"), all.x=T)
+    
     names(allstartup)[names(allstartup) == 'value'] <- 'startup'
   
     write.csv(allstartup, paste0(output_fol,"fast_startup_all.csv"))
   } else {
     print("Loading v_startup_all.csv")
     allstartup = read_csv(file = paste0(output_fol,"fast_startup_all.csv"))
-    allstartup$prob=1/params$nrandp
+    # allstartup$prob=1/params$nrandp
+    allstartup = select(allstartup, -prob)
+    print("starting getProbs")
+    allprobs = getProbs(params, instance_in_fol, length(unique(prod$scenario)))
+    print("finished getProbs")
+    allstartup = merge(as.data.table(allstartup), as.data.table(allprobs), by.x = c("scenario","nperiod"), by.y = c("scenarionum","periodnum"), all.x=T)
+    
   }
   
   # allstartup = allstartup %>%
@@ -448,7 +473,6 @@ combineRunResults <- function(runID, runDate, graphs = T,
   
   # associate generator production cost
   # prod = merge(as.data.table(prod), as.data.table(gendat[,c("plantUnique","VCost","PLC2ERTA")]), all.x=T,by.x="GEN_IND",by.y="plantUnique")
-  prod$prob = 1/params$nrandp
   
   prodcost = prod %>%
     mutate(expectedcost = MWout * VCost * prob,

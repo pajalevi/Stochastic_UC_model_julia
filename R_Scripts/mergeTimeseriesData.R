@@ -130,6 +130,7 @@ loadTimeseriesData <- function(output_fol, dataType, overlap = NULL, dataStage, 
         
         # load probability associated with each scenario
         # and associate correct label
+        # this won't work for runs with random DR
         if(probabilities){
           probs = read_csv(file = paste0(input_fol,"demandScenarios_prob_",dist_ID,"_p",
                                          periodnum,"_",firstperiod,"_",lastperiod,

@@ -111,21 +111,34 @@ xx = list.files(path = "/home/groups/weyant/plevi_outputs/slow_hydro/", pattern 
 runIDs27 = substr(xx, 1, nchar(xx)-11)
 runDates27 = substr(xx, nchar(xx)-9,100)
 
-xx = list.files(path = "/home/groups/weyant/plevi_outputs/slowgas/", pattern = glob2rx("*_o25_*keyDays2*"))
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/slowgas/", pattern = glob2rx("*_o2*keyDays2*"))
 runIDs34 = substr(xx, 1, nchar(xx)-11)
 runDates34 = substr(xx, nchar(xx)-9,100)
 
-runIDs = c(runIDs22)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates22)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("*_o2*keyDays2*"))
+last_loc = as.vector(regexpr("\\_[^\\_]*$", xx))
+runIDs35 = substr(xx, 1, last_loc - 1)
+runDates35 = substr(xx, last_loc+1,100)
+
+
+runIDs = c(runIDs35)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates35)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 
 
+
+
 # iterate through all summary files and combine them ####
-combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scratch/users/pjlevi/julia_outputs/INFORMS/"){
+combineSummaryFiles = function(runIDs, runDates, SHRLK = TRUE, SCRATCH = "/scratch/users/pjlevi/julia_outputs/INFORMS/", outputFol = NULL){
   # library(plyr) #for rbind.fill
   if(SHRLK){
     base_fol = "/home/users/pjlevi/dr_stoch_uc/julia_ver/"
-    output_fol_base  = "/home/groups/weyant/plevi_outputs/"#slowgas/"
+    if(is.null(outputFol)){
+      output_fol_base  = "/home/groups/weyant/plevi_outputs/"#slowgas/"
+    } else {
+      print("using provided output folder")
+      output_fol_base  = outputFol
+    }
     # output_fol_base = "/home/users/pjlevi/dr_stoch_uc/julia_ver/outputs/"
     input_fol = "inputs/"
     inputs_file = paste0(base_fol,"/code/inputs_ercot.csv")

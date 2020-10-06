@@ -90,6 +90,7 @@ p + aes(y = `Expected cost reduction from DR, frac`, shape = dr_varcost) + scale
 
 ############ FIGURE 1 ################
 results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_08-21.csv")#09-08.csv") #Fig 1 - take 2
+results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_09-08.csv") #Fig 1 - take 2
 
 pd <- position_dodge(0.25)
 # results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_05-01_new_gendat_noNAs.csv") #Fig 1
@@ -172,7 +173,32 @@ p = ggplot(filter(fig_results,runtype != "start" & runtype != "noDR" &
 p
 p + 
   ggsave(paste0(outputfol,"Figure1_08-21.png"), width = 6*0.85, height = 5*0.8)
+##### Stuff for rand plat ######
+fig_results$type[which(fig_results$type == "rand")] = "Reliability\n(plus notification)"
 
+fig_results$runlevel[which(fig_results$runID == "rand_o2_100mean_keyDays2")] = 1
+fig_results$runlevel[which(fig_results$runID == "rand_o2_90mean_keyDays2")] = 2
+fig_results$runlevel[which(fig_results$runID == "rand_o2_70mean_keyDays2")] = 3
+fig_results$runlevel[which(fig_results$runID == "rand_o2_50mean_keyDays2")] = 4
+
+p = ggplot(filter(fig_results,runtype != "start" & runtype != "noDR" & 
+                    (dr_varcost == 35 | dr_varcost == 70 | dr_varcost == 10000)), 
+           # aes(x = type, y = `Expected cost reduction from DR`,
+           aes(x = type, y = `Expected cost reduction from DR, frac`,
+               color = dr_varcost, shape = runlevel)) +
+  geom_point(size = 2) +
+  # geom_text(aes(label = runlabel),size = 2,vjust = 0, hjust  = -0.6) +
+  geom_errorbar(aes(ymin = `cost reduction lowbound, frac`, ymax = `cost reduction hibound, frac`), alpha = 0.5,#, linetype = hydro),
+                width=.3, position = pd) +
+  theme_minimal() +
+  # scale_color_manual(values = modpalette) +
+  labs(y = "Savings relative to no DR scenario", x = "Constraint Type") +
+  scale_color_manual(name="DR Variable\nCost", values = modpalette) +
+  scale_shape_discrete(name="Constraint Level") +
+  scale_y_continuous(labels = scales::percent, limits = c(-0.00005,0.002)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+p
 
 ############ FIGURE 4 ################
 results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_05-01_new_gendat_noNAs.csv") #Fig 1 # the 'new gendat' is just an update of co2 emissions

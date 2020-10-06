@@ -193,8 +193,16 @@ xx = c("dur4_o25_keyDays2_2020-07-20")
 runIDs35 = substr(xx, 1, nchar(xx)-11)
 runDates35 = substr(xx, nchar(xx)-9,100)
 
-runIDs = c(runIDs33)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates33)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("rand*_o2_*keyDays2*"))
+runIDs36 = substr(xx, 1, nchar(xx)-11)
+runDates36 = substr(xx, nchar(xx)-9,100)
+
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("rand*_o1_*keyDays2*"))
+runIDs37 = substr(xx, 1, nchar(xx)-11)
+runDates37 = substr(xx, nchar(xx)-9,100)
+
+runIDs = c(runIDs37)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates37)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 
@@ -203,7 +211,7 @@ summary_combine = T # needed to create prod.csv
 plotDR = F
 genbreakdown_only = F # this is done in summary_combine
 rampdata_df = F
-loadOverrideOption = T# should prod be re-calculated?
+loadOverrideOption = F# should prod be re-calculated?
 ##----##----##----##
 
 instance_in_fol = paste0(base_fol,input_fol,inputfolID,"/") # e.g. "/home/users/pjlevi/dr_stoch_uc/julia_ver/inputs/5d_6o_keyDays2/"
