@@ -201,8 +201,12 @@ xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("
 runIDs37 = substr(xx, 1, nchar(xx)-11)
 runDates37 = substr(xx, nchar(xx)-9,100)
 
-runIDs = c(runIDs37)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates37)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+xx = c("rand_o2_100mean_5050_keyDays2_2020-10-05")
+runIDs38 = substr(xx, 1, nchar(xx)-11)
+runDates38 = substr(xx, nchar(xx)-9,100)
+
+runIDs = c(runIDs38)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates38)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 # overlaplength = 12 # should be read in from inputs_ercot
 

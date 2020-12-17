@@ -176,6 +176,7 @@ p +
 ##### Stuff for rand plat ######
 fig_results$type[which(fig_results$type == "rand")] = "Reliability\n(plus notification)"
 
+fig_results$runlevel[which(fig_results$runID == "rand_o1_100mean_keyDays2")] = 5
 fig_results$runlevel[which(fig_results$runID == "rand_o2_100mean_keyDays2")] = 1
 fig_results$runlevel[which(fig_results$runID == "rand_o2_90mean_keyDays2")] = 2
 fig_results$runlevel[which(fig_results$runID == "rand_o2_70mean_keyDays2")] = 3
@@ -194,11 +195,54 @@ p = ggplot(filter(fig_results,runtype != "start" & runtype != "noDR" &
   # scale_color_manual(values = modpalette) +
   labs(y = "Savings relative to no DR scenario", x = "Constraint Type") +
   scale_color_manual(name="DR Variable\nCost", values = modpalette) +
-  scale_shape_discrete(name="Constraint Level") +
+  scale_shape_discrete(name="Constraint Level", labels = c("1","2","3","4","1: One realization")) +
   scale_y_continuous(labels = scales::percent, limits = c(-0.00005,0.002)) + 
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 p
+
+p + 
+  ggsave(paste0(outputfol,"fig1_withRand_o1_10-06.png"), width = 6.5, height = 5)
+
+
+#### INFORMS presentation plots ####
+# make group
+fig_results$Category = "NA"
+fig_results$Category[which(fig_results$type == "Availability")] = "Other Limits" #"Availability Restrictions"
+fig_results$Category[which(fig_results$type == "Duration")] = "Other Limits"
+fig_results$Category[which(fig_results$type == "Energy")] = "Other Limits"
+fig_results$Category[which(fig_results$type == "Hour")] = "Other Limits"
+fig_results$Category[which(fig_results$type == "Unconstrained")] = "Unlimited"
+fig_results$Category[which(fig_results$type == "Reliability\n(plus notification)")] = "Reliability Limited"
+fig_results$Category[which(fig_results$type == "Notification")] = "Other Limits"#"Notification Limited" #
+fig_results$Category = factor(fig_results$Category, levels = c("Unlimited","Other Limits","Availability Restrictions","Notification Limited","Reliability Limited","NA"))
+
+modpalette[7] = "black"
+fig_results$runlevel = as.character(fig_results$runlevel)
+pd <- position_dodge(0.9)
+pq = ggplot(filter(fig_results,runtype != "start" & runtype != "noDR" & #runtype != "rand" &
+                    (dr_varcost == 35 ) &#| dr_varcost == 70 | dr_varcost == 10000) &
+                     runID != "rand_o1_100mean_keyDays2"), 
+           # aes(x = type, y = `Expected cost reduction from DR`,
+           aes(x = Category, #type,#
+               y = `Expected cost reduction from DR, frac`,
+               color = Category, #type,#
+               alpha = runlevel, shape = dr_varcost)) +
+  # facet_wrap(~dr_varcost, ncol=1) +
+  geom_point(size = 2, position = position_dodge(0.1)) +
+  # geom_text(aes(label = runlabel),size = 2,vjust = 0, hjust  = -0.6) +
+  geom_errorbar(aes(ymin = `cost reduction lowbound, frac`, ymax = `cost reduction hibound, frac`),# alpha = 0.5,#, linetype = hydro),
+                width=0, position = position_dodge(0.1)) +
+  theme_minimal() +
+  # scale_color_manual(values = modpalette) +
+  labs(y = "Savings relative to no DR scenario", x = "Constraint Type") +
+  scale_color_manual(name="DR Constraint\nType", values = modpalette) +
+  scale_alpha_manual(name="Constraint Level", labels = c("1","2","3","4","1: One realization"), values = c(1,.7,.5,.3,1)) +
+  scale_y_continuous(labels = scales::percent, limits = c(-0.00005,0.002)) + 
+  scale_shape_manual(values = c(16,4), name = "Variable cost\n($/MWh)") +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+pq
+pq + ggsave(paste0(outputfol,"fig3_presentation_10-20.png"), width = 6.5, height = 5)
 
 ############ FIGURE 4 ################
 results = read_csv("/Users/patricia/Documents/Google Drive/stanford/Value of DR Project/Data/julia_output/Production_jan2020/combined_summary_05-01_new_gendat_noNAs.csv") #Fig 1 # the 'new gendat' is just an update of co2 emissions

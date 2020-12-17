@@ -120,9 +120,14 @@ last_loc = as.vector(regexpr("\\_[^\\_]*$", xx))
 runIDs35 = substr(xx, 1, last_loc - 1)
 runDates35 = substr(xx, last_loc+1,100)
 
+xx = list.files(path = "/home/groups/weyant/plevi_outputs/", pattern = glob2rx("*_o*keyDays2*"))
+last_loc = as.vector(regexpr("\\_[^\\_]*$", xx))
+runIDs36 = substr(xx, 1, last_loc - 1)
+runDates36 = substr(xx, last_loc+1,100)
 
-runIDs = c(runIDs35)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
-runDates = c(runDates35)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
+
+runIDs = c(runIDs36)#, runIDs12)#c(runIDs15,runIDs14,runIDs12)#c(runIDs1,runIDs2)
+runDates = c(runDates36)#,runDates12)#c(runDates15,runDates14,runDates12)#c(runDates1, runDates2)
 inputfolID = "5d_6o_keyDays2" # for plotDR - need to fix to read in dynamically.
 
 

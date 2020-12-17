@@ -6,8 +6,8 @@ periodfileloc = "/Users/patricia/Documents/Google Drive/stanford/Value of DR Pro
 names = list.files(path = periodfileloc, pattern = "^periods")
 
 meanresponse = 1
-nomega = 1
-randID = "o1_100mean_"
+nomega = 2
+randID = "o2_100mean_5050_"
 
 for(i in 1:length(names)){
   print(names[i])
@@ -16,7 +16,7 @@ for(i in 1:length(names)){
   
   vdr = matrix(nrow = nrow(periods), ncol = nomega, dimnames = list(c(), paste0("x",1:nomega)))
   if(nomega ==2){
-    responses = c(1,0)
+    responses = c(1,1)
   } else if(nomega ==1) {
     responses = c(meanresponse)
   }
@@ -25,7 +25,7 @@ for(i in 1:length(names)){
   }
   vdrp = matrix(nrow = 1, ncol = nomega, dimnames = list(c(), paste0("x",1:nomega)) )
   if(nomega ==2){
-    vdrp[1,] = c(meanresponse, 1-meanresponse)
+    vdrp[1,] = c(0.5,0.5)#c(meanresponse, 1-meanresponse)
   } else if(nomega ==1) {
     vdrp[1,] = c(1)
   }
