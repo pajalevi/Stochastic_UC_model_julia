@@ -21,6 +21,7 @@ using JuMP
 using Gurobi
 using DataFrames
 using CSV
+using Dates
 # using JLD2
 include("convert3dto2d.jl")
 include("make_scenarios.jl")
@@ -100,15 +101,15 @@ elseif nargs <5
 end
 
 
-read_inputs = CSV.read(string(params_fol,input_file_name))
-read_inputs = read_inputs[:,[:input_name, Symbol(input_version)]]
+read_inputs = CSV.File(string(params_fol,input_file_name)) |> DataFrame
+read_inputs = read_inputs[!,[:input_name, Symbol(input_version)]]
 # add cmd line args to read_inputs file
 newdf = DataFrame(input_name = ARGNAMES[1:length(localARGS)], args = localARGS)
-names!(newdf.colindex,map(parse,["input_name",input_version]))
+rename!(newdf,Symbol.(["input_name",input_version])) #rename column 2
 read_inputs = vcat(read_inputs, newdf)
 @show read_inputs
 # ~ transpose read_inputs so that values can be referenced by name
-read_inputs[:,:rowkey] = 1
+read_inputs.rowkey = ones(size(read_inputs)[1])
 inputs = unstack(read_inputs,:rowkey, :input_name, Symbol(input_version))
 
 # parse out non-string inputs
@@ -150,10 +151,11 @@ end
 ### TIME PERIOD DATA
 # -------------------------------------------
 if multiTF
-    hours = CSV.read(string(subsel_data_fol,periodID),datarow=1,types=[Int])[1]
+    hours = CSV.File(string(subsel_data_fol,periodID),datarow=1,types=[Int]) |> DataFrame
 else
-    hours = CSV.read(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1,types=[Int])[1]
+    hours = CSV.File(string(subsel_data_fol,"periods_",timeseriesID,".csv"),datarow=1,types=[Int]) |> DataFrame
 end
+hours = vec(hours[!,1])
 n_days = convert(Int32,ceil(length(hours)/24))
 n_periods = length(hours)
 
@@ -161,7 +163,7 @@ n_periods = length(hours)
 t_firsts = 1
 t_notfirst = collect(2:length(hours))
 
-dem2 = CSV.read(string(default_data_fol, inputs[1,:demandFile]),datarow=2,missingstring="NA")
+dem2 = CSV.File(string(default_data_fol, inputs[1,:demandFile]),datarow=2,missingstring="NA") |> DataFrame
 # subselect for just the rows corresponding to 'hours'
 dem = dem2[hours,2]
 
@@ -178,8 +180,8 @@ dem = dem2[hours,2]
 
 ## Net Demand uncertainty ##
 
-if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv"))
-    ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_nd.csv"))
+if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv")) #haven't checked the below section for 1.0 compatibility
+    ndprobs = CSV.read(string(default_data_fol , "dist_input_",inputs[1,:stochID],"_nd.csv"),DataFrame)
     ndv_in = convert(Array,ndprobs[1,:]) # converts the first row of probs to an Array
     ndpro_in = rationalize.(convert(Array,ndprobs[2,:])) #to avoid rounding issues later
 
@@ -189,8 +191,8 @@ if !isfile(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],
     writecsvmulti(DataFrame(vdem),subsel_data_fol,string("demandScenarios_vdem","_",inputs[1,:stochID]),multiTF,periodsave)
     writecsvmulti(DataFrame(pro),subsel_data_fol,string("demandScenarios_prob","_",inputs[1,:stochID]),multiTF,periodsave)
 else
-    vdem = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv")))
-    pro = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_prob","_",inputs[1,:stochID],"_",periodsave,".csv")))
+    vdem = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_vdem","_",inputs[1,:stochID],"_",periodsave,".csv"),DataFrame))
+    pro = convert(Array,CSV.read(string(subsel_data_fol,"demandScenarios_prob","_",inputs[1,:stochID],"_",periodsave,".csv"),DataFrame))
 end
 
 # testing:
@@ -211,7 +213,7 @@ dem_real = dem .* vdem
 # GENERATOR DATA
 # -------------------------------------------
 
-genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA")
+genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="NA",DataFrame)
 
 # Tips for manipulating genset data:
 # genset[Symbol("Plant Name")] # this is how to access by column name if there are spaces
@@ -228,9 +230,9 @@ genset = CSV.read(string(default_data_fol,inputs[1,:genFile]), missingstring ="N
 # set_interest = ["c"]# for this to work must have the []
 # findin(x,set_interest)
 
-dr_ind = findin(genset[:Fuel],dr_gens)
-slow_ind = findin(genset[:Speed],["SLOW"])
-fast_ind = findin(genset[:Speed],["FAST"])
+dr_ind = findall((in)(["DR"]),genset[!,:Speed])
+slow_ind = findall((in)(["SLOW"]),genset[!,:Speed])
+fast_ind = findall((in)(["FAST"]),genset[!,:Speed])
 
 # adjust slow/fast defn based on DRtype
 if DRtype == 1
@@ -244,11 +246,11 @@ else
 end
 
 #generator min and max
-pmin = genset[:PMin]
-pmax = genset[:Capacity]
-startup = genset[:StartCost]
-varcost = genset[:VCost]
-rampmax = genset[:ramprate]
+pmin = genset.PMin
+pmax = genset.Capacity
+startup = genset.StartCost
+varcost = genset.VCost
+rampmax = genset.ramprate
 
 # for manual override of DR variable cost
 if dr_override
@@ -267,8 +269,8 @@ pf = repeat([1.0], inner = [n_g, n_t])
 
 ### Wind and solar
 # load wind, solar info
-solar_avail = CSV.read(string(default_data_fol,"solar_availability_factors_2016.csv"))
-wind_avail = CSV.read(string(default_data_fol,"wind_availability_factors_2016.csv"))
+solar_avail = CSV.read(string(default_data_fol,"solar_availability_factors_2016.csv"),DataFrame)
+wind_avail = CSV.read(string(default_data_fol,"wind_availability_factors_2016.csv"),DataFrame)
 # remove last col of each
 solar_avail = solar_avail[:,1:(ncol(solar_avail)-1)]
 wind_avail = wind_avail[:,1:(ncol(wind_avail)-1)]
@@ -276,25 +278,25 @@ wind_avail = wind_avail[:,1:(ncol(wind_avail)-1)]
 # sub in new info
 for i in 1:length(names(solar_avail))
     col = names(solar_avail)[i]
-    ind = findin(genset[:plantUnique],[convert(String, col)])
+    ind = findall((in)([convert(String, col)]),genset[!,:plantUnique])
     pf[ind,:] = solar_avail[hours,i]
 end
 
 for i in 1:length(names(wind_avail))
     col = names(wind_avail)[i]
-    ind = findin(genset[:plantUnique],[convert(String, col)])
+    ind = findall((in)([convert(String, col)]),genset[!,:plantUnique])
     pf[ind,:] = wind_avail[hours,i]
 end
 
 ### Demand Response
-if parse(inputs[1,:availID])!=0 &  DRtype != 0
-    dr_avail = CSV.read(string(default_data_fol,inputs[1,:availID],".csv"))
+if !ismissing(inputs[1,:availID]) &  DRtype != 0
+    dr_avail = CSV.read(string(default_data_fol,inputs[1,:availID],".csv"),DataFrame)
     # remove first col
     dr_avail = dr_avail[:,2:ncol(dr_avail)]
     # sub in new info
     for i in 1:length(names(dr_avail))
         col = names(dr_avail)[i]
-        ind = findin(genset[:plantUnique],[convert(String, col)])
+        ind = findall((in)([convert(String, col)]),genset[!,:plantUnique])
         if length(ind) > 0
             pf[ind,:] = dr_avail[hours,i]
         else
@@ -311,23 +313,23 @@ end
 TIME = 1:n_t
 SCENARIOS = 1:n_omega
 GENERATORS = 1:n_g #all generators
-GEN_NODR = findin(genset[:Fuel],notdr_gens)
+GEN_NODR = findall((in)(notdr_gens),genset[!,:Fuel])
 GF = fast_ind
 GSL = slow_ind #slow generators
 GDR = dr_ind #DR generators
 # need an index for where the DR is in the slow generators
-GDR_SL_ind = findin(GSL,GDR)
+GDR_SL_ind = findall((in)(GDR),GSL)
 
 # -------------------------------------------
 ### MODEL ###
 # m = Model(solver = ClpSolver())
-m = Model(solver=GurobiSolver(Method=MethodParam,#1,
-                              MIPFocus=MIPFocusParam,#3,
-                              MIPGap=MIPGapParam,#0.0003,
-                              NodefileStart = NodefileStartParam,#0.05,
-                              NodefileDir = "/scratch/users/pjlevi/gurobi_solving_outputs/",
-                              Seed = convert(Int64,abs(floor(rand(Float64)*2000000000)))))
-
+m = Model(optimizer_with_attributes(
+                Gurobi.Optimizer,"Method" => MethodParam,
+                "MIPFocus" => MIPFocusParam,
+                "MIPGap" => MIPGapParam,
+                "NodefileStart" => NodefileStartParam,
+                "NodeFileDir" => "/scratch/users/pjlevi/gurobi_solving_outputs/",
+                "Seed" => convert(Int64,abs(floor(rand(Float64)*2000000000)))))
 if no_vars
     error("just testing model so we are stopping here")
 else
@@ -470,13 +472,14 @@ end
 #DURATIONLIM
 # number of hours in a row that DR can be committed
 if durationlim != 0
-    # make a list of lists of 24-h timestep groupings
-    l = Int(durationlim + 1)
-    s = 1
-    WINDOWS = [TIME[i:i+l-1] for i in range(1,s,Int(length(TIME)-l+1))]
-    for i in range(1,s,Int(length(TIME)-l+1))
-        print(TIME[i:i+l-1])
-    end
+    # make a list of lists of duration+1 timestep groupings
+    l = Int(durationlim + 1) #length of window
+    s = 1 #stepsize between windows
+    WINDOWS = [TIME[i:i+l-1] for i in range(1,Int(length(TIME)-l+1),step=s)]
+    # #for testing logic of WINDOWS construction:
+    # for i in range(1,Int(length(TIME)-l+1),step=s)
+    #     println(TIME[i:i+l-1])
+    # end
     for W in WINDOWS
         @constraint(m,[g = 1:n_gdr, o = SCENARIOS],
             sum(u[GDR[g],t,o] for t = W) <= durationlim)
@@ -499,8 +502,8 @@ end
 # SOLVE MODEL
 # -------------------------------------------
 @printf("\nSolving:\n")
-status = solve(m)
-@printf("Status: %s\n", status)
+JuMP.optimize!(m)
+println(string("Status: ",termination_status(m)))
 
 if !isdir(output_fol)
     mkdir(output_fol)
@@ -521,14 +524,14 @@ writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
 
 # check production
 # print("schedule of DR")
-# x = getvalue(p)
+# x = value.(p)
 # x_df = DataFrame(transpose(x))
 # names!(x_df,[Symbol("$input") for input in genset[:plantUnique]])
 # CSV.write(string(output_fol,"production_schedule.csv"), x_df)
 
 # display(x)
 # print("production of DR:")
-y = getvalue(p[GDR,:,:])
+y = value.(p[GDR,:,:])
 
 if DRtype != 0
     y_out = convert3dto2d(y,1, 3,  2,
@@ -539,7 +542,7 @@ end
 
 # display(y)
 # print("production of slow generators:")
-zs = getvalue(p[GSL,:,:])
+zs = value.(p[GSL,:,:])
 
 y_out = convert3dto2d(zs,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
@@ -549,7 +552,7 @@ writecsvmulti(y_out,output_fol,"slow_production",multiTF,periodsave)
 
 # display(zs)
 # print("production of fast generators:")
-zf = getvalue(p[GF,:,:])
+zf = value.(p[GF,:,:])
 y_out = convert3dto2d(zf,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[fast_ind,:plantUnique])
@@ -559,23 +562,23 @@ writecsvmulti(y_out,output_fol,"fast_production",multiTF,periodsave)
 
 # check commitment
 # print("commitment of slow generators:")
-# display(getvalue(w))
-w_out = getvalue(w)
+# display(value.(w))
+w_out = value.(w)
 wdf = DataFrame(transpose(w_out))
 names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
 writecsvmulti(wdf,output_fol,"slow_commitment",multiTF,periodsave)
 
 # print("commitment of all generators")
-# display(getvalue(u))
-u_out = getvalue(u)
+# display(value.(u))
+u_out = value.(u)
 y_out = convert3dto2d(u_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
 writecsvmulti(y_out,output_fol,"u_commitment",multiTF,periodsave)
 
 # print("startup of all generators")
-# display(getvalue(v))
-v_out = getvalue(v)
+# display(value.(v))
+v_out = value.(v)
 y_out = convert3dto2d(v_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
      genset[:plantUnique])
@@ -583,19 +586,19 @@ writecsvmulti(y_out,output_fol,"v_startup",multiTF,periodsave)
 
 # check costs
 # print("total cost")
-totcost = getvalue(sum(pro[o] *
+totcost = value.(sum(pro[o] *
     sum(start_num[g,t,o]*startup[g] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 # display(totcost)
 # print("startup cost")
-# display("text/plain",getvalue(start_cost))
+# display("text/plain",value.(start_cost))
 # print("fraction of total costs that are startup costs")
-totstartupcost = getvalue(sum(pro[o] *
+totstartupcost = value.(sum(pro[o] *
     sum(start_num[g,t,o]*startup[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 # display("text/plain",totstartupcost/totcost)
 # print("fraction of total costs that are var cost")
-totvarcost = getvalue(sum(pro[o] *
+totvarcost = value.(sum(pro[o] *
     sum(p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
 # display("text/plain",totvarcost/totcost)
