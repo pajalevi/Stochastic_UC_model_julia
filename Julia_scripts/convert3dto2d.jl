@@ -31,7 +31,7 @@ function convert3dto2d(array3d,ind_dim,x_dim,y_dim,colnames,indnames)
     end
 
     df2d = DataFrame(array2d)
-    names!(df2d,[Symbol("$input") for input in colnames])
+    rename!(df2d,[Symbol("$input") for input in colnames])
 
     return df2d
 end

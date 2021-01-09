@@ -254,7 +254,7 @@ rampmax = genset.ramprate
 
 # for manual override of DR variable cost
 if dr_override
-    varcost[dr_ind] = dr_varcost
+    varcost[dr_ind] .= dr_varcost
 end
 
 # Generator PARAMS ###
@@ -501,7 +501,7 @@ end
 # -------------------------------------------
 # SOLVE MODEL
 # -------------------------------------------
-@printf("\nSolving:\n")
+println("\nSolving:\n")
 JuMP.optimize!(m)
 println(string("Status: ",termination_status(m)))
 
@@ -526,7 +526,7 @@ writecsvmulti(read_inputs,output_fol,"inputfile",multiTF,periodsave)
 # print("schedule of DR")
 # x = value.(p)
 # x_df = DataFrame(transpose(x))
-# names!(x_df,[Symbol("$input") for input in genset[:plantUnique]])
+# rename!(x_df,[Symbol("$input") for input in genset[:plantUnique]])
 # CSV.write(string(output_fol,"production_schedule.csv"), x_df)
 
 # display(x)
@@ -565,7 +565,7 @@ writecsvmulti(y_out,output_fol,"fast_production",multiTF,periodsave)
 # display(value.(w))
 w_out = value.(w)
 wdf = DataFrame(transpose(w_out))
-names!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
+rename!(wdf,[Symbol("$input") for input in genset[slow_ind,:plantUnique]])
 writecsvmulti(wdf,output_fol,"slow_commitment",multiTF,periodsave)
 
 # print("commitment of all generators")
@@ -573,7 +573,7 @@ writecsvmulti(wdf,output_fol,"slow_commitment",multiTF,periodsave)
 u_out = value.(u)
 y_out = convert3dto2d(u_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
-     genset[:plantUnique])
+     genset[!,:plantUnique])
 writecsvmulti(y_out,output_fol,"u_commitment",multiTF,periodsave)
 
 # print("startup of all generators")
@@ -581,26 +581,32 @@ writecsvmulti(y_out,output_fol,"u_commitment",multiTF,periodsave)
 v_out = value.(v)
 y_out = convert3dto2d(v_out,1, 3, 2,
     vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
-     genset[:plantUnique])
+     genset[!,:plantUnique])
 writecsvmulti(y_out,output_fol,"v_startup",multiTF,periodsave)
 
 # check costs
 # print("total cost")
-totcost = value.(sum(pro[o] *
+costexpr = @expression(m,sum(pro[o] *
     sum(start_num[g,t,o]*startup[g] + p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
+totcost = value.(costexpr)
 # display(totcost)
 # print("startup cost")
 # display("text/plain",value.(start_cost))
 # print("fraction of total costs that are startup costs")
-totstartupcost = value.(sum(pro[o] *
+startupexpr = @expression(m,sum(pro[o] *
     sum(start_num[g,t,o]*startup[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
+totstartupcost = value.(startupexpr)
+# totstartupcost = value.(sum(pro[o] *
+#     sum(start_num[g,t,o]*startup[g] for g = GENERATORS, t = TIME)
+#     for o = SCENARIOS))
 # display("text/plain",totstartupcost/totcost)
 # print("fraction of total costs that are var cost")
-totvarcost = value.(sum(pro[o] *
+varcostexpr = @expression(m,sum(pro[o] *
     sum(p[g,t,o]*varcost[g] for g = GENERATORS, t = TIME)
     for o = SCENARIOS))
+totvarcost = value.(varcostexpr)
 # display("text/plain",totvarcost/totcost)
 
 output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
@@ -613,25 +619,27 @@ output_summary = DataFrame(TotalCost = totcost, TotStartupCst = totstartupcost,
 writecsvmulti(output_summary,output_fol,"summary_stats",multiTF,periodsave)
 
 # Get dual variables and save
-if !trueBinaryStartup
+## Currently does not work - mingen_subset[saveind,:] doesn't work because saveind is not of type AbstractVector{Bool} https://dataframes.juliadata.org/stable/lib/indexing/
+if has_duals(m)
     #supplydemand #2D
-    sd_shadow = DataFrame(getdual(supplydemand))
+    sd_shadow = DataFrame(JuMP.shadow_price.(supplydemand))
     writecsvmulti(sd_shadow,output_fol,"supplydemand_shadow",multiTF,periodsave)
 
     ### mingen ###
-    mingen_shadow = getdual(mingen)
+    mingen_shadow = JuMP.shadow_price.(mingen)
     mingen_sf = convert3dto2d(mingen_shadow,1, 3,  2,
         vcat([String("o$i") for i in 1:n_omega],"GEN_IND","t"),
-         genset[:,:plantUnique])
+         genset[!,:plantUnique])
     # only save rows where there is a nonzero shadow price
-    shadowsum = sum(convert(Array{Float64},mingen_sf[:,1:n_omega]),2)
+    mingen_subset = mingen_sf[!,1:n_omega]
+    shadowsum = sum(convert(Array{Float64},mingen_subset),dims=2)
     saveind = find(shadowsum .!= 0)
-    writecsvmulti(mingen_sf[saveind,:],output_fol,"mingen_shadow",multiTF,periodsave)
+    writecsvmulti(mingen_subset[saveind,:],output_fol,"mingen_shadow",multiTF,periodsave)
 
     ### type3dr ###
     ## TODO: This does not work.
     if DRtype == 3
-        type3dr_shadow = getdual(type3dr)
+        type3dr_shadow = JuMP.shadow_price.(type3dr)
         type3dr_sf = convert3dto2d(type3dr_shadow,1, 3,  2,
             vcat([String("o$i") for i in 1:n_omega],"DR_IND","t"),
              genset[dr_ind,:plantUnique])
